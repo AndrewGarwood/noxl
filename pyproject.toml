@@ -1,0 +1,24 @@
+[project]
+name = "noxl"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Andrew Garwood", email = "andrew.garwood.949@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+noxl = "noxl:main"
+
+[build-system]
+requires = ["uv_build>=0.11.8,<0.12.0"]
+build-backend = "uv_build"
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.uv.sources]
+lute = { path = "../lute", editable = true }
