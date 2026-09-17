@@ -7,7 +7,13 @@ authors = [
     { name = "Andrew Garwood", email = "andrew.garwood.949@gmail.com" }
 ]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "lute",
+    "openpyxl>=3.1.5",
+    "pyqi",
+    "pywin32>=312",
+    "xlsxwriter>=3.2.9",
+]
 
 [project.scripts]
 noxl = "noxl:main"
@@ -22,3 +28,4 @@ where = ["."]
 
 [tool.uv.sources]
 lute = { path = "../lute", editable = true }
+pyqi = { path = "../pyqi", editable = true }

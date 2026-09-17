@@ -1,2 +1,5 @@
-def main() -> None:
-    print("Hello from noxl!")
+"""
+*`@package`* `noxl/__init__`
+"""
+
+from .models import *
