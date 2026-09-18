@@ -14,9 +14,9 @@ import threading
 import win32com.client as win32
 from lute import (LogMsg, WarningManager, get_logger)
 from pyqi import (fs, Array)
-from ...constants import vba
+from noxl.constants import vba
 from .types import ComWorkbookSource
-from ...types import (ExcelSaveTimeoutError, CalculationState)
+from noxl.types import (ExcelSaveTimeoutError, CalculationState)
 
 mlog = get_logger(Path(__file__).parent.stem)
 
@@ -272,6 +272,11 @@ class ExcelSession():
             timeout_seconds=timeout_seconds,
         ))
     
+    def wait_for_async_query_complete(self):
+        """ `self.excel.CalculateUntilAsyncQueriesDone()` """
+        self.excel.CalculateUntilAsyncQueriesDone()
+        self.wait_for_idle()
+    
     def open_workbook(
         self, 
         path: fs.StrPath,
@@ -309,7 +314,7 @@ class ExcelSession():
         self._workbooks[key] = wb
         return wb
 
-    def _resolve_wb_source(self, src: ComWorkbookSource,/) -> win32.CDispatch:
+    def resolve_wb_source(self, src: ComWorkbookSource,/) -> win32.CDispatch:
         """*`@returns`* `self.open_workbook(src) if isinstance(src, (str, Path)) else src` """
         return self.open_workbook(src) if isinstance(src, (str, Path)) else src
 

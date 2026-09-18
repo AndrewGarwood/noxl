@@ -18,13 +18,13 @@ KT = TypeVar('KT', bound=str | RowKey)
 VT = TypeVar('VT')
 
 
-class SheetRangeSpecDict(TypedDict):
+class SheetRangeDict(TypedDict):
     sheetname: str
     origin: NotRequired[str | list[int] | list[str | int]]
     num_cols: NotRequired[int]
 
 @dataclass
-class SheetRangeSpec(Json.Serial[SheetRangeSpecDict]):
+class SheetRange(Json.Serial[SheetRangeDict]):
     """
     - *`@property`* `sheetname` `(str)`
     - *`@property`* `origin` `(CellAddressLike) default = 'A2'`
@@ -34,7 +34,7 @@ class SheetRangeSpec(Json.Serial[SheetRangeSpecDict]):
     origin: CellAddressLike = "A2"
     num_cols: Optional[int] = None
     @classmethod
-    def from_dict(cls, data: Json.JsonDict[SheetRangeSpecDict], /) -> SheetRangeSpec:
+    def from_dict(cls, data: Json.JsonDict[SheetRangeDict], /) -> SheetRange:
         try:
             _origin = data.get("origin", "A2")
             if isinstance(_origin, list):
@@ -48,15 +48,16 @@ class SheetRangeSpec(Json.Serial[SheetRangeSpecDict]):
             raise ValueError(LogMsg.err(error=e, data=data)) from e
 
     @classmethod
-    def range_dict(cls, data: dict[str, SheetRangeSpecDict]) -> SheetRangeDictionary:
+    def range_dict(cls, data: dict[str, SheetRangeDict]) -> SheetRangeDictionary:
         result: SheetRangeDictionary = {}
         for key, val in data.items():
             result[key] = cls.from_dict(val)
         return result
 
-SheetRangeDictionary: TypeAlias = dict[str, SheetRangeSpec]
+SheetRangeDictionary: TypeAlias = dict[str, SheetRange]
 """ e.g. `{ [txnId: string]: SheetRangeSpec }` """
 
+SheetRangeSpec = SheetRange # temp alias
 
 class SheetCopyEndpointDict(TypedDict):
     path: str
@@ -81,7 +82,7 @@ class SheetCopyEndpoint(Json.Serial[SheetCopyEndpointDict]):
     def from_range_spec(
         cls, 
         path: fs.StrPath, 
-        spec: SheetRangeSpec, 
+        spec: SheetRange, 
         require_absolute: bool=True
     ) -> SheetCopyEndpoint:
         path = fs.to_path(path)

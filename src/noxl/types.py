@@ -2,31 +2,32 @@
 *`@file`* `noxl/types.py`
 """
 from __future__ import annotations
-from .constants.vba import *
+from .constants import vba
+from .models import *
 from dataclasses import dataclass
 from typing import Any
 from pyqi import (BaseIntEnum, MetaEnum, SortOptions)
 
 
 class CalculationState(BaseIntEnum): # from vba Eenum XlCalculationState
-    DONE = xlDone
-    CALCULATING = xlCalculating
-    PENDING = xlPending
+    DONE = vba.xlDone
+    CALCULATING = vba.xlCalculating
+    PENDING = vba.xlPending
 
 
 class LayoutForm(BaseIntEnum):
-    TABULAR = xlTabular
-    OUTLINE = xlOutline
+    TABULAR = vba.xlTabular
+    OUTLINE = vba.xlOutline
 
 class ExcelSortOrder(BaseIntEnum):
     """
     ```
-    ASC = xlAscending # 1
-    DSC = xlDescending # 2
+    ASC = vba.xlAscending # 1
+    DSC = vba.xlDescending # 2
     ```
     """
-    ASC = xlAscending
-    DSC = xlDescending
+    ASC = vba.xlAscending
+    DSC = vba.xlDescending
 
 
 class ExcelSortOptions(SortOptions[ExcelSortOrder]):
@@ -43,23 +44,21 @@ class ExcelAggregation(MetaEnum):
     _value_: int
     meta: FunctionMeta
 
-    SUM = (xlSum, FunctionMeta("Sum", 1))
-    COUNT = (xlCount, FunctionMeta("Count", 2))
-    AVERAGE = (xlAverage, FunctionMeta("Average", 3))
-    MAX = (xlMax, FunctionMeta("Max", 4))
-    MIN = (xlMin, FunctionMeta("Min", 5))
-    PRODUCT = (xlProduct, FunctionMeta("Product", 6))
-    COUNT_NUMS = (xlCountNums, FunctionMeta("Count Numbers", 7))
-    STDEV = (xlStDev, FunctionMeta("StdDev", 8))
-    STDEVP = (xlStDevP, FunctionMeta("StdDevP", 9))
-    VAR = (xlVar, FunctionMeta("Var", 10))
-    VARP = (xlVarP, FunctionMeta("VarP", 11))
+    SUM = (vba.xlSum, FunctionMeta("Sum", 1))
+    COUNT = (vba.xlCount, FunctionMeta("Count", 2))
+    AVERAGE = (vba.xlAverage, FunctionMeta("Average", 3))
+    MAX = (vba.xlMax, FunctionMeta("Max", 4))
+    MIN = (vba.xlMin, FunctionMeta("Min", 5))
+    PRODUCT = (vba.xlProduct, FunctionMeta("Product", 6))
+    COUNT_NUMS = (vba.xlCountNums, FunctionMeta("Count Numbers", 7))
+    STDEV = (vba.xlStDev, FunctionMeta("StdDev", 8))
+    STDEVP = (vba.xlStDevP, FunctionMeta("StdDevP", 9))
+    VAR = (vba.xlVar, FunctionMeta("Var", 10))
+    VARP = (vba.xlVarP, FunctionMeta("VarP", 11))
 
 
     @property
     def code(self) -> int:
-        if not isinstance(self._value_, int): 
-            raise RuntimeError(f"@ self.code, ExcelAggregation._value_ is not int")
         return self._value_
 
     @property
@@ -74,6 +73,22 @@ class ExcelAggregation(MetaEnum):
     def from_code(cls, code: int, /) -> ExcelAggregation:
         return cls.from_value(code)
 
+    @staticmethod
+    def to_subtotals_payload(*fn: ExcelAggregation) -> list[bool]:
+        """
+        *`@returns`* `bool[]<12>`
+
+        *`@example`*
+        ```
+        >>> ExcelAggregation.to_subtotals_payload(ExcelAggregation.SUM, ExcelAggregation.COUNT)
+        [False, True, True, False, False, False, False, False, False, False, False, False]
+        >>>
+        ```
+        """
+        payload: list[bool] = [False] * 12
+        for f in fn:
+            payload[f.subtotals_index] = True
+        return payload
 
 class ExcelSaveTimeoutError(TimeoutError):
     """Raised when an Excel workbook save exceeds the configured timeout."""

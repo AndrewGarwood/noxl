@@ -8,7 +8,7 @@ from ._worksheet import *
 from ._workbook import *
 
 from . import (
-    _cell as cell, 
-    _worksheet as worksheet,
-    _workbook as workbook
+    _cell as CellModel, 
+    _worksheet as WorksheetModel,
+    _workbook as WorkbookModel
 )
