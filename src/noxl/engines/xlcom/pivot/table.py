@@ -109,7 +109,10 @@ def create(options: CreateOptions, /):
             time.sleep(1)
             xl.close_workbook(wb)
     except Exception as e:
-        raise RuntimeError(LogMsg.err(e, options=str(options))) from e
+        raise RuntimeError(LogMsg.err(
+            e, 
+            options=str(options)
+        )) from e
 
 def _handle_fields(pt: CDispatch, fields: Fields, /) -> None:
     try:
@@ -241,9 +244,3 @@ def _handle_slicers(
 __all__ = [ 
     *[x.__name__ for x in (refresh, create)], # type: ignore
 ]
-"""
->>> from src.noxl.engines.xlcom.pivot import table
->>> print(table.__all__)
-['refresh', 'create']
->>> 
-"""

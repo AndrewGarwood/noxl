@@ -4,7 +4,7 @@
 from __future__ import annotations
 from typing import (Any, Optional)
 from  win32com.client import CDispatch
-from lute import LogMsg
+from lute import LogMsg, annotate
 from ....models import (CellAddress, CellAddressLike)
 
 def range_by_dimensions(
@@ -60,5 +60,39 @@ def get_range(
     )
 
 
-def get_current_region(ws: CDispatch, addr: CellAddressLike="A2", /) -> CDispatch:
-    return ws.Range(get_cell(ws, addr)).CurrentRegion
+def get_current_region(
+    ws: CDispatch, 
+    addr: CellAddressLike="A2", 
+    /,
+    include_header: bool=True
+) -> CDispatch:
+    region = ws.Range(get_cell(ws, addr)).CurrentRegion
+    return (
+        region if include_header 
+        else region.Offset(1, 0).Resize(region.Rows.Count - 1, region.Columns.Count)
+    )
+
+def get_current_region_dimensions(region: CDispatch, /) -> tuple[int, int]: 
+    """ 
+    - *`@param`* `region (CDispatch)` the return value of `get_current_region(...)`
+    - *`@returns`* `dimensions (tuple[int, int]) = (row_count, col_count)` 
+    """
+    try:
+        row_count = region.Rows.Count
+        if (not isinstance(row_count, int)):
+            raise RuntimeError(LogMsg(
+                "region.Rows.Count = rowcount is not an integer",
+                row_count=annotate(row_count)
+            ))
+        col_count = region.Columns.Count
+        if (not isinstance(row_count, int)):
+            raise RuntimeError(LogMsg(
+                "region.Columns.Count = col_count is not an integer",
+                col_count=annotate(col_count)
+            ))
+        return (row_count, col_count)
+    except Exception as e:
+        raise RuntimeError(LogMsg.err(
+            e,
+            region=annotate(region)
+        ))    
