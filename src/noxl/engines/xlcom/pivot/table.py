@@ -17,8 +17,9 @@ from .field import (
 )
 from .slicer import (SlicerType)
 from noxl.constants.vba import *
+from noxl.models._cell import is_empty_cell_value
 from noxl.engines.xlcom.types import (TableReference)
-from .. import workbook, payload
+from .. import workbook
 from ..session import (ExcelSession)
 
 mlog = get_logger(Path(__file__).parent.parent.stem)
@@ -48,7 +49,7 @@ def create(options: CreateOptions, /):
             dst_addr = CellAddress.from_any(options.dst.addr)
             dst_cell: CDispatch = dst_ws.Cells(dst_addr.row, dst_addr.col)
             dst_cell_value = dst_cell.Value
-            if (not payload.is_empty_cell_value(dst_cell_value)):
+            if (not is_empty_cell_value(dst_cell_value)):
                 raise RuntimeError(LogMsg(
                     f"Destination cell is not empty or None",
                     f"@ sheet {options.dst.sheetname}",

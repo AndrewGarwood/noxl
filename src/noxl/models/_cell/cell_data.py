@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 from typing import (
-    Mapping, OrderedDict, TypeVar, Generic,
+    Any, Mapping, OrderedDict, Self, TypeVar, Generic,
 )
 from ..types import (RowKey)
 from .address import (CellAddress)
@@ -16,7 +16,7 @@ KT = TypeVar('KT', bound=str | RowKey)
 VT = TypeVar('VT')
 
 @dataclass
-class HeaderIndex(Json.Serial):
+class HeaderIndex():
     """
     ```
     row: int
@@ -42,7 +42,8 @@ class HeaderIndex(Json.Serial):
                 addr=CellAddress(self.row, self.columns[h])
             )
         ))
-
+    
+    
 @dataclass
 class MappedCellData(Json.Serial, Generic[KT, VT]):
     """

@@ -10,7 +10,7 @@ from typing import (
 from ..types import (RowKey)
 from .address import (CellAddress, CellAddressLike, CellAddressDict)
 from dataclasses import (dataclass, field)
-from pyqi import (Json)
+from pyqi import (Iterable, Json) # , Array
 from lute import (LogMsg)
 
 
@@ -72,5 +72,39 @@ class CellValue(Json.Serial, Generic[KT, VT]):
                 addr=addr
             )
         except Exception as e:
-            raise e
+            raise RuntimeError(LogMsg.err(e, received=str(data))) from e
+        
+    # @staticmethod
+    # def is_empty(
+    #     value: Any, 
+    #     /, 
+    #     empty_values: Iterable[Any]=[None, ""]
+    # ) -> bool:
+    #     return is_empty_cell_value(value, empty_values)
+    
+    # @staticmethod
+    # def normalize():
+    #     return NotImplemented
 
+DEFAULT_NULL_VALUES = (None, "", "null", "none")
+
+def is_empty_cell_value(
+    value: Any, 
+    /, 
+    empty_values: Iterable[Any]=DEFAULT_NULL_VALUES
+) -> bool:
+    return normalize_cell_value(value) in empty_values
+
+def normalize_cell_value(
+    value: Any, 
+    /,
+    case_sensitive: bool=False,
+    null_to_empty: bool=True,
+    null_values: Iterable[Any]=DEFAULT_NULL_VALUES
+) -> str:
+    if value is None: return ""
+    _value = str(value).strip()
+    _lower = _value.casefold()
+    if (_lower in null_values and null_to_empty): 
+        return ""
+    return _lower if not case_sensitive else _value
