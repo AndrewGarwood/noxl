@@ -66,6 +66,7 @@ def get_current_region(
     /,
     include_header: bool=True
 ) -> CDispatch:
+    """ `typeof range.CurrentRegion == Range` """
     region = ws.Range(get_cell(ws, addr)).CurrentRegion
     return (
         region if include_header 
@@ -95,4 +96,4 @@ def get_current_region_dimensions(region: CDispatch, /) -> tuple[int, int]:
         raise RuntimeError(LogMsg.err(
             e,
             region=annotate(region)
-        ))    
+        ))

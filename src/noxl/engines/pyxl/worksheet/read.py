@@ -3,19 +3,19 @@
 """
 from __future__ import annotations
 from pathlib import Path
-from typing import (Any, Optional, Mapping, Callable, Sequence, OrderedDict)
+from typing import (Any, Optional, Mapping, Callable, Sequence, OrderedDict, overload)
 import lute
 from pyqi import (Array, String, Function)
 from openpyxl.utils import (get_column_letter)
 from noxl.models import (CellAddress, CellAddressLike, HeaderIndex, normalize_cell_value)
-from ..types import (PyxlWorkbook, PyxlWorksheet, PyxlWorkbookSource)
+from ..types import (PyxlWorkbook, PyxlWorksheet, PyxlWorkbookSource, Row)
 from ..utils import (resolve_pyxl_wb, get_visible_sheetnames)
 
 LogMsg = lute.LogMsg
 mlog = lute.get_logger(Path(__file__).parent.stem)
 
 # kinda unnecessary but useful if don't want to type ws.cell(...).value all the time 
-def cell_value(ws: PyxlWorksheet, row: int, column: int) -> Any:
+def cell_value(ws: PyxlWorksheet, /, row: int, column: int) -> Any:
     """ 
     *`@returns`* `ws.cell(row, column).value`
     """
@@ -66,7 +66,7 @@ def find_header(
         ws = wb[resolved_sheetname]
         max_scan_row = min(scan_rows, ws.max_row)
         max_scan_col = min(scan_cols, ws.max_column)
-        rows = row_data(ws)
+        _rows = get_all_rows(ws)
         def acc_rowdict(acc: OrderedDict[str, int], curr: Any, i: int):
             if (not curr): return acc
             value = str(curr).strip()
@@ -78,7 +78,7 @@ def find_header(
                 normalize_cell_value, 
                 case_sensitive=False
             )
-        for row_idx, r in enumerate(rows[:max_scan_row], start=1):
+        for row_idx, r in enumerate(_rows[:max_scan_row], start=1):
             if row_idx > scan_rows:
                 break
             row = r[:max_scan_col]
@@ -115,6 +115,73 @@ def find_header(
         if wb is not None: wb.close()
 
 
-def row_data(ws: PyxlWorksheet, /) -> list[tuple[Any,...]]:
-    """ *`@returns`* `list(ws.iter_rows(values_only=True))`"""
-    return list(ws.iter_rows(values_only=True))
+def get_all_rows(ws: PyxlWorksheet, /, values_only: bool=True) -> list[Row]:
+    """ *`@returns`* `list(ws.iter_rows(values_only=values_only))`"""
+    return list(ws.iter_rows(values_only=values_only))
+
+@overload
+def rows(
+    src: PyxlWorksheet,
+    *, 
+    values_only: bool=True,
+) -> list[Row]: ...
+
+@overload
+def rows(
+    src: PyxlWorkbookSource, 
+    sheetname: str,
+    /,
+    origin: CellAddressLike="A1", 
+    max_cols: Optional[int]=None, 
+    values_only: bool=True
+) -> list[Row]: ...
+
+def rows(
+    src: PyxlWorksheet | PyxlWorkbookSource,
+    sheetname: Optional[str]=None,  
+    origin: Optional[CellAddressLike]=None, 
+    max_cols: Optional[int]=None, 
+    values_only: bool=True
+) -> list[Row]:
+    wb: Optional[PyxlWorkbook]=None
+    try:
+        ws: Optional[PyxlWorksheet]=None
+        if (isinstance(src, PyxlWorksheet)):
+            ws = src
+        else:
+            if (not sheetname): 
+                raise ValueError(LogMsg.bad_arg(
+                    sheetname, "sheetname", 
+                    "sheetname must be defined when src is PyxlWorkbookSource", 
+                    str
+                ))
+            wb = resolve_pyxl_wb(src)
+            ws = wb[sheetname]
+        origin = CellAddress.from_any(origin) if origin else CellAddress(1, 1)
+        result: list[Row] = []
+        row_start = max(origin.row, ws.min_row)
+        col_start = max(origin.col, ws.min_column)
+        col_end = (
+            origin.col + max_cols if max_cols is not None 
+            else ws.max_column
+        )
+        for row in ws.iter_rows(
+            min_row=row_start,
+            min_col=col_start,
+            max_col=col_end,
+            values_only=values_only
+        ):
+            result.append(row)
+        return result
+    except Exception as e:
+        raise RuntimeError(LogMsg.err(
+            e,
+            src=lute.annotate(src),
+            sheetname=sheetname,
+            wb="<unknown>" if wb is None else wb.path,
+            origin=str(origin),
+            max_cols=max_cols,
+            values_only=values_only
+        ))
+    finally:
+        if (wb is not None): wb.close()

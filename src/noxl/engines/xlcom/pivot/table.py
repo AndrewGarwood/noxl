@@ -132,7 +132,7 @@ def _handle_fields(pt: CDispatch, fields: Fields, /) -> None:
                 )
             )
     except Exception as e:
-        raise RuntimeError(LogMsg.err(e))
+        raise RuntimeError(LogMsg.err(e, fields=str(fields)))
 
 def _handle_axis_fields(
     pt: CDispatch, 
@@ -237,7 +237,13 @@ def _handle_slicers(
                     slc_cache.SlicerItems(item_key).Selected = item_key in keys
             current_top += height + spacing
         except Exception as e:
-            raise e
+            raise RuntimeError(LogMsg.err(
+                e,
+                f"Error handling SlicerOptions ({i} / {len(slicers)})",
+                slicer_options=str(slc),
+                wb=str(getattr(wb, "FullName", "<name unretrievable>")),
+                ws=str(getattr(ws, "Name", "<name unretrievable>"))
+            ))
 
 
 

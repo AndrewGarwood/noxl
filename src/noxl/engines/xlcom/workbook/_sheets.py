@@ -36,17 +36,17 @@ def resolve_dst_sheet(wb: CDispatch, base: str, use_existing: bool=False) -> CDi
         idx += 1
     return add_worksheet(wb, f"{base}{idx}")
 
-def get_worksheet(wb: CDispatch, name: str, /) -> CDispatch:
+def get_worksheet(wb: CDispatch, key: str | int, /) -> CDispatch:
     """
     i.e. `get_existing_worksheet`
     - *`@returns`* `ws (CDispatch)`
-    - *`@throws`* `RuntimeError` if error from `wb.Worksheets(name)`
+    - *`@throws`* `RuntimeError` if error from `wb.Worksheets(key)`
     """
     try:
-        return wb.Worksheets(name)
+        return wb.Worksheets(key)
     except Exception as e:
         raise RuntimeError(LogMsg.err(
             error=e,
-            name=name,
+            key=key,
             wb_FullName=wb.FullName
         )) from e

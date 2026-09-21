@@ -12,10 +12,10 @@ import psutil, gc
 import time
 import threading
 import win32com.client as win32
-from lute import (LogMsg, WarningManager, get_logger)
+from lute import (LogMsg, WarningManager, annotate, get_logger)
 from pyqi import (fs, Array)
 from noxl.constants import vba
-from .types import ComWorkbookSource
+from .types import (ComWorkbookSource, SheetKey)
 from noxl.types import (ExcelSaveTimeoutError, CalculationState)
 
 mlog = get_logger(Path(__file__).parent.stem)
@@ -190,10 +190,10 @@ class ExcelSession():
         except Exception as e:
             elapsed = time.perf_counter() - started
             if timed_out.is_set():
-                raise ExcelSaveTimeoutError(LogMsg(
+                raise ExcelSaveTimeoutError(LogMsg.err(e,
                     f"Excel save timed out after {elapsed:.2f}s "
                     f"Excel PID={self._pid} was terminated.",
-                    f"error={e}"
+                    wb=str(getattr(wb, "FullName", "<name unretrievable>"))
                 )) from e
             raise
         finally:
@@ -308,6 +308,7 @@ class ExcelSession():
         wb.SaveAs(Filename=str(p), FileFormat=51)
         add entry to self._workbooks: dict[str, win32.CDispatch]
         """
+        
         key = str(path)
         wb = self.excel.Workbooks.Add()
         wb.SaveAs(Filename=key, FileFormat=vba.xlOpenXMLWorkbook)
@@ -317,6 +318,39 @@ class ExcelSession():
     def resolve_wb_source(self, src: ComWorkbookSource,/) -> win32.CDispatch:
         """*`@returns`* `self.open_workbook(src) if isinstance(src, (str, Path)) else src` """
         return self.open_workbook(src) if isinstance(src, (str, Path)) else src
+
+    def move_sheet(
+        self, 
+        src: win32.CDispatch, 
+        src_sheet: SheetKey, 
+        dst: win32.CDispatch | fs.StrPath, 
+        after_dst_key: Optional[SheetKey]=None,
+        dst_sheetname: Optional[str]=None,
+        mk_copy: bool=True
+    ) -> win32.CDispatch: 
+        try:
+            if (isinstance(dst, (str, Path))):
+                dst = self.open_workbook(dst)
+            if (after_dst_key is None):
+                after_dst_key = len(tuple(dst.Sheets)) + 1
+            dst_sheet: win32.CDispatch = dst.Sheets(after_dst_key)
+            if (mk_copy):
+                src.Sheets(src_sheet).Copy(After=dst_sheet)
+            else: # move
+                src.Sheets(src_sheet).Move(After=dst_sheet)
+            if (dst_sheetname):
+                dst_sheet.Name = dst_sheetname
+            return dst_sheet
+        except Exception as e:
+            raise RuntimeError(LogMsg.err(e, 
+                "Failed to move sheet",
+                src_wb=getattr(src, "FullName", "<name unretrievable>"),
+                src_sheet=src_sheet,
+                dst=annotate(dst),
+                after_dst_key=after_dst_key,
+                dst_sheetname=dst_sheetname,
+                mk_copy=mk_copy
+            ))
 
 def _get_pid(excel: win32.CDispatch) -> Optional[int]:
     """
@@ -333,6 +367,6 @@ def _get_pid(excel: win32.CDispatch) -> Optional[int]:
         return None
 
 
-def _safe_str(value: Any) -> str:
+def _safe_str(value: Any, /) -> str:
     try: return str(value)
     except Exception: return "<unprintable>"

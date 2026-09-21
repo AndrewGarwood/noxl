@@ -2,25 +2,28 @@
 *`@file`* `enginges/xlcom/worksheet/write`
 """
 from __future__ import annotations
-from typing import (Any)
+from typing import (Any, Optional)
 import win32com.client as win32
-from lute import LogMsg
+from lute import LogMsg, annotate
 from pyqi import Array
 from ....models import *
 
-from .read import (range_by_dimensions)
+from .read import (range_by_dimensions, get_range)
 from ..payload import (to_com_payload)
 
 
-def clear_range_values(
+def clear_range(
     ws: win32.CDispatch, 
     /,
     origin: CellAddressLike,
-    num_rows: int, 
-    num_cols: int 
+    num_rows: Optional[int]=None, 
+    num_cols: Optional[int]=None 
 ):
     try:
-        _range = range_by_dimensions(ws, origin, num_rows, num_cols)
+        _range = (
+            get_range(ws, origin) if (num_rows is None or num_cols is None)
+            else range_by_dimensions(ws, origin, num_rows, num_cols)
+        )
         _range.ClearContents()
     except Exception as e:
         raise Exception(LogMsg.err(
@@ -48,6 +51,6 @@ def write_rows(
             f"Failed to write rows to Range in Excel Worksheet",
             error=e,
             origin=str(origin),
-            rows=f"{type(rows)=}, {len(rows)=}"
+            rows=annotate(rows)
         )) from e
     pass

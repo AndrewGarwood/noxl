@@ -14,3 +14,8 @@ class TableReference:
     wb_source: ComWorkbookSource
     sheetname: str
     tablename: str
+
+SheetKey: TypeAlias = str | int
+""" 
+type `key` passed into `Workbook.Sheets(key)` 
+"""
