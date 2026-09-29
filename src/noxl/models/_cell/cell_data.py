@@ -4,8 +4,9 @@
 """
 from __future__ import annotations
 from typing import (
-    Any, Mapping, OrderedDict, Self, TypeVar, Generic,
+    Any, Mapping, OrderedDict, Self, TypeVar, Generic
 )
+from typing_extensions import (TypedDict)
 from ..types import (RowKey)
 from .address import (CellAddress)
 from .value import (CellValue)
@@ -14,6 +15,10 @@ from pyqi import Json, Array
 
 KT = TypeVar('KT', bound=str | RowKey)
 VT = TypeVar('VT')
+
+class HeaderIndexDict(TypedDict):
+    row: int
+    columns: dict[str, int]
 
 @dataclass
 class HeaderIndex():
@@ -39,13 +44,18 @@ class HeaderIndex():
             lambda h: CellValue(
                 key=h, 
                 value=h, 
-                addr=CellAddress(self.row, self.columns[h])
+                addr=CellAddress(row=self.row, col=self.columns[h])
             )
         ))
     
-    
+
+class MappedCellDataDict(TypedDict):
+    sheetname: str
+    header: HeaderIndexDict
+    data: dict[Any, Any]
+
 @dataclass
-class MappedCellData(Json.Serial, Generic[KT, VT]):
+class MappedCellData(Json.Serial[MappedCellDataDict], Generic[KT, VT]):
     """
     ```
     sheetname: str

@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import (
     Any, Mapping, OrderedDict, Sequence, 
     Optional, TypeVar, Generic, Union ,TypeAlias, 
-    TypedDict, NotRequired, TypeGuard
+    TypeGuard
 )
+from typing_extensions import (TypedDict)
 from dataclasses import (dataclass, field)
 import re
 from openpyxl.utils import (get_column_letter, column_index_from_string, coordinate_to_tuple)
@@ -39,7 +40,7 @@ CellAddressLike: TypeAlias = Union[
 - `tuple[str, str] and t[0] matches \\d+ and t[1] matches \\d+` → assume `(row, col)`
 """
 @dataclass()
-class CellAddress(Json.Serial):
+class CellAddress(Json.Serial[CellAddressDict]):
     """ 1-based indexing for (row, col) """
     row: int
     col: int

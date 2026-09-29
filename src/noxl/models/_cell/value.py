@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import (
     Any, Mapping, OrderedDict, Sequence, 
     Optional, TypeVar, Generic, Union ,TypeAlias, 
-    TypedDict, NotRequired
+    NotRequired
 )
+from typing_extensions import (TypedDict)
 from ..types import (RowKey)
 from .address import (CellAddress, CellAddressLike, CellAddressDict)
 from dataclasses import (dataclass, field)
@@ -24,7 +25,7 @@ class CellValueDict(TypedDict):
 
 
 @dataclass()
-class CellValue(Json.Serial, Generic[KT, VT]):
+class CellValue(Json.Serial[CellValueDict], Generic[KT, VT]):
     """
     ```
     key: KT

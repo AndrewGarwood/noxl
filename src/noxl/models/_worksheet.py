@@ -7,8 +7,9 @@ from dataclasses import dataclass, field
 from typing import (
     Any, Mapping, Optional, 
     TypeVar, Generic,TypeAlias, 
-    TypedDict, NotRequired
+    NotRequired
 )
+from typing_extensions import (TypedDict)
 from pyqi import (Json, String, fs)
 from lute import LogMsg
 from ._cell import *
