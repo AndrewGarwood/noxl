@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "../lute",
+        "../pyqi",
+    ]
+}
