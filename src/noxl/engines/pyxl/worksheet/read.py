@@ -121,19 +121,19 @@ def get_all_rows(ws: PyxlWorksheet, /, values_only: bool=True) -> list[Row]:
 
 @overload
 def rows(
-    src: PyxlWorksheet,
-    *, 
-    values_only: bool=True,
-) -> list[Row]: ...
-
-@overload
-def rows(
     src: PyxlWorkbookSource, 
     sheetname: str,
     /,
     origin: CellAddressLike="A1", 
     max_cols: Optional[int]=None, 
     values_only: bool=True
+) -> list[Row]: ...
+
+@overload
+def rows(
+    src: PyxlWorksheet,
+    *, 
+    values_only: bool=True,
 ) -> list[Row]: ...
 
 def rows(
