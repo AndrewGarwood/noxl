@@ -12,7 +12,7 @@ from dataclasses import (dataclass, field)
 import re
 from openpyxl.utils import (get_column_letter, column_index_from_string, coordinate_to_tuple)
 from lute import LogMsg
-from pyqi import (Json)
+from pyqi import (Json, require)
 
 
 
@@ -153,15 +153,18 @@ class CellAddress(Json.Serial[CellAddressDict]):
         return f"{get_column_letter(self.col)}{self.row}"
 
     def to_dict(self):
-        result: CellAddressDict = {
-            "row": self.row,
-            "col": self.col
-        }
-        return result
+        return CellAddressDict(row=self.row, col=self.col)
 
     def offset(self, rows: int = 0, cols: int = 0) -> CellAddress:
-        """ *`@returns`* `CellAddress(row=self.row + rows, col=self.col + cols)`"""
-        return CellAddress(row=self.row + rows, col=self.col + cols)
+        """ 
+        *`@returns`* `CellAddress(row=self.row + rows, col=self.col + cols)`
+        
+        *`@throws`* `Exception` if offset results in an `index < 1`
+        """
+        return CellAddress(
+            row=require.positive_integer(self.row+rows, "new_row = self.row + rows"), 
+            col=require.positive_integer(self.col+cols, "new_col = self.col + cols")
+        )
 
 
 
@@ -170,6 +173,9 @@ ColumnIndex: TypeAlias = str | int
 # PrimitiveIndex: TypeAlias = str | int
 # def is_primitive_index(value: Any,/) -> TypeGuard[PrimitiveIndex]:
 #     return isinstance(value, (str, int))
+
+
+#TODO: should probably check index >= 1
 
 def is_valid_row_index(value: Any, /) -> TypeGuard[RowIndex]:
     return (

@@ -30,7 +30,8 @@ def find_header(
     scan_rows: int=25,
     scan_cols: int=50,
     unique_sheetname: bool=False,
-    normalize_header_value: Optional[Callable[..., str]]=None
+    normalize_header_value: Optional[Callable[..., str]]=None,
+    col_offset: Optional[int]=None
 ):
     wb: Optional[PyxlWorkbook] = None
     resolved_sheetname: Optional[str] = None
@@ -43,6 +44,11 @@ def find_header(
             raise ValueError(
                 "min_header_len must be positive integer when required_headers not provided"
             )
+        if (col_offset and (not isinstance(col_offset, int) or col_offset < 0)):
+            raise ValueError(LogMsg.bad_arg(
+                col_offset, "col_offset", "Nonnegative integer required", int
+            ))
+        if (col_offset is None): col_offset = 0
         wb = resolve_pyxl_wb(wb_source)
         valid_sheetnames = wb.sheetnames
         if (isinstance(sheetname, str)):
@@ -81,8 +87,8 @@ def find_header(
         for row_idx, r in enumerate(_rows[:max_scan_row], start=1):
             if row_idx > scan_rows:
                 break
-            row = r[:max_scan_col]
-            rowdict = Array.reduce(row, acc_rowdict, OrderedDict(), 1)
+            row = r[col_offset:max_scan_col]
+            rowdict = Array.reduce(row, acc_rowdict, OrderedDict(), 1+col_offset)
             header_found: bool = False
             norm_row = set(Array.map(rowdict.keys(), normalize_header_value))
             if (required_headers):
@@ -116,14 +122,14 @@ def find_header(
 
 
 def get_all_rows(ws: PyxlWorksheet, /, values_only: bool=True) -> list[Row]:
-    """ *`@returns`* `list(ws.iter_rows(values_only=values_only))`"""
+    """ *`@returns`* `list(ws.iter_rows(values_only=values_only)) = list[Sequence[Any]]` """
     return list(ws.iter_rows(values_only=values_only))
 
 @overload
 def rows(
-    src: PyxlWorkbookSource, 
+    src: PyxlWorkbookSource,
+    /, 
     sheetname: str,
-    /,
     origin: CellAddressLike="A1", 
     max_cols: Optional[int]=None, 
     values_only: bool=True
@@ -162,7 +168,7 @@ def rows(
         row_start = max(origin.row, ws.min_row)
         col_start = max(origin.col, ws.min_column)
         col_end = (
-            origin.col + max_cols if max_cols is not None 
+            origin.col + max_cols - 1 if max_cols 
             else ws.max_column
         )
         for row in ws.iter_rows(

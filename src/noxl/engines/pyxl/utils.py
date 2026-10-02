@@ -19,7 +19,7 @@ def resolve_pyxl_wb(
     )
 
 def is_hidden_worksheet(ws: PyxlWorksheet, /):
-    return not "hidden" in ws.sheet_state.lower()
+    return "hidden" in ws.sheet_state.lower()
 
 def get_visible_sheetnames(wb_source: PyxlWorkbookSource, /) -> list[str]:
     wb = resolve_pyxl_wb(wb_source)
