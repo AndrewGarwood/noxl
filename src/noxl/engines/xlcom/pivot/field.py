@@ -8,7 +8,7 @@ from typing import (Any, Iterable, Literal, Mapping, Optional, Sequence, TypeAli
 from pyqi.models import BaseIntEnum
 from noxl.constants import vba
 from noxl.types import (ExcelAggregation, ExcelSortOptions, LayoutForm)
-from pyqi import Array, Arbitrary, TypeVar, resolve_arbitrary
+from pyqi import Array, Arbitrary, resolve_arbitrary
 from lute import LogMsg, bad_arg
 
 
