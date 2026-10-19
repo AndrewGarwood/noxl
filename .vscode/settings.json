@@ -2,5 +2,8 @@
     "python.analysis.extraPaths": [
         "../lute",
         "../pyqi",
-    ]
+    ],
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportUnsupportedDunderAll": "information"
+    }
 }

@@ -4,7 +4,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import (
-    Any, Optional,
+    Any, Literal, Optional,
 )
 from pathlib import Path
 import win32process, pythoncom
@@ -12,10 +12,13 @@ import psutil, gc
 import time
 import threading
 import win32com.client as win32
+from win32com.client import gencache as win32gencache
 from lute import (LogMsg, WarningManager, annotate, get_logger)
-from pyqi import (fs, Array)
+from pyqi import (fs, Array, safe, export)
 from noxl.constants import vba
+from noxl.utils.sheetname import get_resolved_sheetname
 from .types import (ComWorkbookSource, SheetKey)
+from .workbook._sheets import (add_worksheet, resolve_dst_sheet, get_sheetnames)
 from noxl.types import (ExcelSaveTimeoutError, CalculationState)
 
 mlog = get_logger(Path(__file__).parent.stem)
@@ -58,6 +61,7 @@ class ExcelSession():
             self._coinitialized = True
 
             self._excel = win32.DispatchEx("Excel.Application")
+            # self._excel = win32gencache.EnsureDispatch("Excel.Application")
             if self._excel is None:
                 raise RuntimeError(LogMsg(
                     f"win32.DispatchEx('Excel.Application') returned None"
@@ -138,7 +142,7 @@ class ExcelSession():
 
     def _rm_wb_ref(self, wb: win32.CDispatch) -> None:
         """ `_remove_workbook_reference` """
-        key = str(wb.FullName)
+        key = self.workbook_key(wb)
         if key in self._workbooks:
             del self._workbooks[key]
         
@@ -149,7 +153,7 @@ class ExcelSession():
         save_changes: bool = False,
     ) -> None:
         key: str | None = None
-        try: key = str(wb.FullName)
+        try: key = self.workbook_key(wb)
         except Exception: key = None
         try:
             wb.Close(SaveChanges=save_changes)
@@ -173,6 +177,8 @@ class ExcelSession():
             The broken COM call should then return/raise, and this method raises
             ExcelSaveTimeoutError.
         """
+        if self.is_readonly_workbook(wb):
+            raise RuntimeError(LogMsg("Unable to save workbook because ReadOnly=True"))
         timed_out = threading.Event()
         started = time.perf_counter()
         def _on_timeout() -> None:
@@ -193,7 +199,7 @@ class ExcelSession():
                 raise ExcelSaveTimeoutError(LogMsg.err(e,
                     f"Excel save timed out after {elapsed:.2f}s "
                     f"Excel PID={self._pid} was terminated.",
-                    wb=str(getattr(wb, "FullName", "<name unretrievable>"))
+                    wb=safe.readattr(wb, "FullName")
                 )) from e
             raise
         finally:
@@ -201,8 +207,17 @@ class ExcelSession():
         elapsed = time.perf_counter() - started
         if timed_out.is_set():
             raise ExcelSaveTimeoutError(LogMsg(
-                f"Excel save timed out after {elapsed:.2f}s."
+                f"Excel save timed out after {elapsed:.2f}s.",
+                wb=safe.readattr(wb, "FullName")
             ))
+        if not bool(wb.Saved):
+            raise RuntimeError(
+                LogMsg(
+                    "Workbook remains modified after wb.Save() returned",
+                    wb=safe.readattr(wb, "FullName"),
+                    elapsed=elapsed,
+                )
+            )
 
     def terminate_owned_process(self) -> bool:
         if self._proc is None or not self._proc.is_running():
@@ -213,48 +228,6 @@ class ExcelSession():
             return False
         return bool(fs.kill_procs([self._proc]))
 
-    # maybe see if can refactor to 
-    # get_addin(addin_type: Literal["COMAddIns",...], name: str) -> self.excel[addin_type](name)
-    def get_com_addin(self, name: str, /) -> win32.CDispatch:
-        """
-        *`@returns`* `self.excel.COMAddIns(name)`
-        - `= Excel.Application.COMAddIns(name)`
-        """
-        try:
-            addin = self.excel.COMAddIns(name)
-            if addin is None:
-                raise KeyError(LogMsg(
-                    f"Application.COMAddIns({name}) returned None"
-                ))
-            return addin
-        except Exception as e:
-            raise Exception(LogMsg.err(e,
-                f"Failed to get COM add in from excel instance",
-            ))
-
-    def get_addins(self) -> list[win32.CDispatch]:
-        count = int(self.excel.COMAddIns.Count)
-        addins: list[win32.CDispatch] = []
-        for i in range(0, count+1):
-            addins.append(self.excel.COMAddIns.Item(i))
-        return addins
-
-    def get_addin_snapshots(
-        self, 
-        attrs: list[str]=["description", "prog_id", "guid", "connect"], 
-        /
-    ) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        try:
-            for addin in self.get_addins():
-                rows.append({
-                    k: _safe_str(getattr(addin, k, "<unknown>")) 
-                    for k in attrs
-                })
-        except Exception as e:
-            rows.append({"error": repr(e)})
-        return rows
-    
     def wait_for_idle(self, timeout_seconds: int=900, poll_seconds: float=2.0):
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
@@ -293,12 +266,7 @@ class ExcelSession():
         )
         if activate:
             wb.Activate()
-        key = wb.FullName
-        if not isinstance(key, str):
-            raise RuntimeError(LogMsg(
-                f"wb.FullName is not a string.",
-                actual_type=f"{type(wb.FullName)=}"
-            ))
+        key = self.workbook_key(wb)
         self._workbooks[key] = wb
         return wb
 
@@ -308,8 +276,7 @@ class ExcelSession():
         wb.SaveAs(Filename=str(p), FileFormat=51)
         add entry to self._workbooks: dict[str, win32.CDispatch]
         """
-        
-        key = str(path)
+        key = self.workbook_key(path)
         wb = self.excel.Workbooks.Add()
         wb.SaveAs(Filename=key, FileFormat=vba.xlOpenXMLWorkbook)
         self._workbooks[key] = wb
@@ -321,37 +288,209 @@ class ExcelSession():
 
     def move_sheet(
         self, 
-        src: win32.CDispatch, 
+        src: ComWorkbookSource, 
         src_sheet: SheetKey, 
-        dst: win32.CDispatch | fs.StrPath, 
-        after_dst_key: Optional[SheetKey]=None,
-        dst_sheetname: Optional[str]=None,
-        mk_copy: bool=True
-    ) -> win32.CDispatch: 
+        dst: ComWorkbookSource,
+        *,
+        dst_anchor_key: SheetKey | None=None,
+        dst_anchor_how: Literal["Before", "After"]="After",
+        mk_copy: bool=True,
+        result_sheetname: str | None=None
+    ):
+        """
+        ***@not_implemented***
+
+        - *`@param`* `src (ComWorkbookSource)` - source workbook
+        - *`@param`* `src_sheet (SheetKey)` - identifier to get source sheet within `src`
+        
+        - for now, requires that source sheetname is not in destination workbook's sheetnames
+        """
         try:
-            if (isinstance(dst, (str, Path))):
-                dst = self.open_workbook(dst)
-            if (after_dst_key is None):
-                after_dst_key = len(tuple(dst.Sheets)) + 1
-            dst_sheet: win32.CDispatch = dst.Sheets(after_dst_key)
-            if (mk_copy):
-                src.Sheets(src_sheet).Copy(After=dst_sheet)
-            else: # move
-                src.Sheets(src_sheet).Move(After=dst_sheet)
-            if (dst_sheetname):
-                dst_sheet.Name = dst_sheetname
-            return dst_sheet
+            src = self.resolve_wb_source(src)
+            dst = self.resolve_wb_source(dst)
+            if (self.workbook_key(src) not in self._workbooks 
+                or self.workbook_key(dst) not in self._workbooks):
+                raise RuntimeError(LogMsg(
+                    f"Source and Destination workbooks must both be opened in same Excel instance"
+                ))
+            dst_sheetnames = get_sheetnames(dst)
+            if (isinstance(dst_anchor_key, str) and dst_anchor_key not in dst_sheetnames):
+                raise ValueError(LogMsg(
+                    f"{dst_anchor_key=} is not an existing sheet in destination workbook",
+                    dst_sheetnames=dst_sheetnames
+                ))
+
+            src_ws = src.Worksheets(src_sheet)
+            src_sheetname = str(src_ws.Name)
+            if (src_sheetname in dst_sheetnames):
+                raise ValueError(LogMsg(
+                    f"Destination Workbook already contains source Worksheet.Name",
+                    src_sheetname=src_sheetname,
+                    dst_sheetnames=str(dst_sheetnames)
+                ))
+            if (dst_anchor_key is None):
+                dst_anchor_key = int(dst.Worksheets.Count)
+                dst_anchor_how = "After"
+            anchor = dst.Worksheets(dst_anchor_key)
+            anchor_index = int(anchor.Index)
+            # var definitions to use as keyword arguments.
+            if dst_anchor_how == "Before":
+                before = anchor
+                after = None
+                result_index = anchor_index
+            else:
+                before = None
+                after = anchor
+                result_index = anchor_index + 1
+
+            dst_count_before = int(dst.Worksheets.Count)
+            src_count_before = int(src.Worksheets.Count)
+            workbook_count_before = int(self.excel.Workbooks.Count)
+
+            src.Activate()
+            src_ws = src.Worksheets(src_sheet)
+            # Keep these as directly written keyword arguments.
+            # Using a dynamically expanded kwargs mapping caused Excel to behave
+            # as though Before and After were omitted.
+            if mk_copy:
+                src_ws.Copy(Before=before, After=after)
+            else:
+                src_ws.Move(Before=before, After=after)
+
+            dst_count_after = int(dst.Worksheets.Count)
+            src_count_after = int(src.Worksheets.Count)
+            workbook_count_after = int(self.excel.Workbooks.Count)
+
+            if workbook_count_after != workbook_count_before:
+                raise RuntimeError(
+                    LogMsg(
+                        "Worksheet operation unexpectedly created a new workbook",
+                        operation="Copy" if mk_copy else "Move",
+                        workbook_count_before=workbook_count_before,
+                        workbook_count_after=workbook_count_after,
+                    )
+                )
+
+            if dst_count_after != dst_count_before + 1:
+                raise RuntimeError(
+                    LogMsg(
+                        "Worksheet operation did not add a worksheet to destination",
+                        operation="Copy" if mk_copy else "Move",
+                        dst_count_before=dst_count_before,
+                        dst_count_after=dst_count_after,
+                    )
+                )
+
+            expected_src_count_after = (
+                src_count_before
+                if mk_copy
+                else src_count_before - 1
+            )
+
+            if src_count_after != expected_src_count_after:
+                raise RuntimeError(
+                    LogMsg(
+                        "Source worksheet count changed unexpectedly",
+                        operation="Copy" if mk_copy else "Move",
+                        src_count_before=src_count_before,
+                        src_count_after=src_count_after,
+                        expected_src_count_after=expected_src_count_after,
+                    )
+                )
+
+            if not 1 <= result_index <= dst_count_after:
+                raise RuntimeError(
+                    LogMsg(
+                        "Expected result index is outside destination worksheet bounds",
+                        result_index=result_index,
+                        dst_count=dst_count_after,
+                    )
+                )
+
+            result_ws = dst.Worksheets(result_index)
+
+            result_parent = str(result_ws.Parent.FullName)
+            expected_parent = str(dst.FullName)
+
+            if result_parent.casefold() != expected_parent.casefold():
+                raise RuntimeError(
+                    LogMsg(
+                        "Resolved result worksheet belongs to an unexpected workbook",
+                        result_sheet=safe.readattr(result_ws, "Name"),
+                        result_parent=result_parent,
+                        expected_parent=expected_parent,
+                    )
+                )
+            if result_sheetname is not None:
+                result_ws.Name = result_sheetname
+            dst.Save()
+            if not bool(dst.Saved):
+                raise RuntimeError(
+                    LogMsg(
+                        "Destination workbook remains modified after Save returned",
+                        dst=safe.readattr(dst, "FullName"),
+                    )
+                )
+            return result_ws
         except Exception as e:
             raise RuntimeError(LogMsg.err(e, 
                 "Failed to move sheet",
-                src_wb=getattr(src, "FullName", "<name unretrievable>"),
+                src_wb=safe.readattr(src, "FullName"),
                 src_sheet=src_sheet,
                 dst=annotate(dst),
-                after_dst_key=after_dst_key,
-                dst_sheetname=dst_sheetname,
                 mk_copy=mk_copy
+            )) from e
+    
+    @staticmethod
+    def workbook_key(wb: ComWorkbookSource, /) -> str:
+        if (isinstance(wb, (str, Path))):
+            return fs.normalized(str(wb))
+        return fs.normalized(str(wb.FullName))
+    
+    def is_readonly_workbook(self, wb: win32.CDispatch, /) -> bool:
+        return bool(wb.ReadOnly)
+    # maybe see if can refactor to 
+    # get_addin(addin_type: Literal["COMAddIns",...], name: str) -> self.excel[addin_type](name)
+    def get_com_addin(self, name: str, /) -> win32.CDispatch:
+        """
+        *`@returns`* `self.excel.COMAddIns(name)`
+        - `= Excel.Application.COMAddIns(name)`
+        """
+        try:
+            addin = self.excel.COMAddIns(name)
+            if addin is None:
+                raise KeyError(LogMsg(
+                    f"Application.COMAddIns({name}) returned None"
+                ))
+            return addin
+        except Exception as e:
+            raise Exception(LogMsg.err(e,
+                f"Failed to get COM add in from excel instance",
             ))
 
+    def get_addins(self) -> list[win32.CDispatch]:
+        count = int(self.excel.COMAddIns.Count)
+        addins: list[win32.CDispatch] = []
+        for i in range(0, count+1):
+            addins.append(self.excel.COMAddIns.Item(i))
+        return addins
+
+    def get_addin_snapshots(
+        self, 
+        attrs: list[str]=["description", "prog_id", "guid", "connect"], 
+        /
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        try:
+            for addin in self.get_addins():
+                rows.append({
+                    k: safe.readattr(addin, k)
+                    for k in attrs
+                })
+        except Exception as e:
+            rows.append({"error": repr(e)})
+        return rows
+    
 def _get_pid(excel: win32.CDispatch) -> Optional[int]:
     """
     Return the process id for an Excel Application COM object.
@@ -367,6 +506,4 @@ def _get_pid(excel: win32.CDispatch) -> Optional[int]:
         return None
 
 
-def _safe_str(value: Any, /) -> str:
-    try: return str(value)
-    except Exception: return "<unprintable>"
+__all__ = export(ExcelSession)

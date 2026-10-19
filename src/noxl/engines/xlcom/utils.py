@@ -16,6 +16,9 @@ def refresh_all(wb_source: ComWorkbookSource, /):
             wb.RefreshAll()
             xl.wait_for_async_query_complete()
     except Exception as e:
-        raise RuntimeError(LogMsg.err(e, wb_source=annotate(wb_source)))
+        raise RuntimeError(LogMsg.err(
+            e, 
+            wb_source=annotate(wb_source)
+        )) from e
 
-
+__all__ = ["refresh_all"]
