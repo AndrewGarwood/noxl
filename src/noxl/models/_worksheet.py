@@ -109,7 +109,7 @@ class SheetCopyEndpoint(Json.Serial[SheetCopyEndpointDict]):
                 num_cols=data.get('num_cols', None)
             )
         except Exception as e:
-            raise Exception(LogMsg.err(error=e, data=data))
+            raise RuntimeError(LogMsg.err(error=e, data=Json.serialize(data))) from e
 
 
 class SheetCopyRequestDict(TypedDict):
@@ -120,6 +120,13 @@ class SheetCopyRequestDict(TypedDict):
 class SheetCopyRequest(Json.Serial[SheetCopyRequestDict]):
     src: SheetCopyEndpoint
     dst: SheetCopyEndpoint
+
+    @classmethod
+    def from_dict(cls, data: SheetCopyRequestDict | dict[str, Any]) -> Self:
+        return cls(
+            src=SheetCopyEndpoint.from_dict(data['src']),
+            dst=SheetCopyEndpoint.from_dict(data['dst'])
+        )
 
 
 @dataclass
