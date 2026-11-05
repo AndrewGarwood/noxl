@@ -2,17 +2,16 @@
 *`@file`* `engines/pyxl/worksheet/read`
 """
 from __future__ import annotations
-from pathlib import Path
-from typing import (Any, Optional, Mapping, Callable, Sequence, OrderedDict, overload)
+from typing import (Any, Mapping, Callable, Sequence, OrderedDict, overload)
 import lute
-from pyqi import (Array, String, Function)
+from pyqi import (Array, String, Function, require)
 from openpyxl.utils import (get_column_letter)
 from noxl.models import (CellAddress, CellAddressLike, HeaderIndex, normalize_cell_value)
 from ..types import (PyxlWorkbook, PyxlWorksheet, PyxlWorkbookSource, Row)
 from ..utils import (resolve_pyxl_wb, get_visible_sheetnames)
 
 LogMsg = lute.LogMsg
-mlog = lute.get_logger(Path(__file__).parent.stem)
+mlog = lute.get_logger(__file__)
 
 # kinda unnecessary but useful if don't want to type ws.cell(...).value all the time 
 def cell_value(ws: PyxlWorksheet, /, row: int, column: int) -> Any:
@@ -21,30 +20,32 @@ def cell_value(ws: PyxlWorksheet, /, row: int, column: int) -> Any:
     """
     return ws.cell(row, column).value
 
+
 def find_header(
     wb_source: PyxlWorkbookSource,
-    sheetname: Optional[str | Callable[[str], bool]]=None,
+    sheetname: str | Callable[[str], bool] | None=None,
     /,
-    required_headers: Optional[Sequence[str]]=None,
+    required_headers: Sequence[str] | None=None,
     min_header_len: int = 2,
     scan_rows: int=25,
     scan_cols: int=50,
     unique_sheetname: bool=False,
-    normalize_header_value: Optional[Callable[..., str]]=None,
-    col_offset: Optional[int]=None
-):
-    wb: Optional[PyxlWorkbook] = None
-    resolved_sheetname: Optional[str] = None
+    normalize_header_value: Callable[..., str] | None=None,
+    col_offset: int | None=None
+) -> HeaderIndex:
+    """
+    *`@returns`* `HeaderIndex (dataclass) = { row: int; columns: dict[str, int]; headers: tuple[str, ...] }`
+    """
+    wb: PyxlWorkbook | None = None
+    resolved_sheetname: str | None = None
     try:
-        if (scan_cols < 1 or scan_rows < 1):
-            raise ValueError(
-                "scan_rows and scan_cols must be positive integers"
-            )
+        require.positive_integer(scan_cols, "scan_cols")
+        require.positive_integer(scan_rows, "scan_rows")
         if (not required_headers and min_header_len < 1):
             raise ValueError(
                 "min_header_len must be positive integer when required_headers not provided"
             )
-        if (col_offset and (not isinstance(col_offset, int) or col_offset < 0)):
+        if (col_offset is not None and (not isinstance(col_offset, int) or col_offset < 0)):
             raise ValueError(LogMsg.bad_arg(
                 col_offset, "col_offset", "Nonnegative integer required", int
             ))
@@ -131,7 +132,7 @@ def rows(
     /, 
     sheetname: str,
     origin: CellAddressLike="A1", 
-    max_cols: Optional[int]=None, 
+    max_cols: int | None=None, 
     values_only: bool=True
 ) -> list[Row]: ...
 
@@ -144,14 +145,14 @@ def rows(
 
 def rows(
     src: PyxlWorksheet | PyxlWorkbookSource,
-    sheetname: Optional[str]=None,  
-    origin: Optional[CellAddressLike]=None, 
-    max_cols: Optional[int]=None, 
+    sheetname: str | None=None,  
+    origin: CellAddressLike | None=None, 
+    max_cols: int | None=None, 
     values_only: bool=True
 ) -> list[Row]:
-    wb: Optional[PyxlWorkbook]=None
+    wb: PyxlWorkbook | None=None
     try:
-        ws: Optional[PyxlWorksheet]=None
+        ws: PyxlWorksheet | None=None
         if (isinstance(src, PyxlWorksheet)):
             ws = src
         else:

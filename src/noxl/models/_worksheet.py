@@ -188,7 +188,9 @@ class SheetLookupOptionsDict(TypedDict):
 @dataclass
 class SheetLookupOptions(SheetOptions, Json.Serial[SheetLookupOptionsDict]):
     """
-    *`@extends`* `SheetOptions`
+    ***deprecated***
+    
+    *`@extends`* `(SheetOptions, Json.Serial[SheetLookupOptionsDict])`
     - lookup values for single key constructed from key_map.keys()
     ```
     path: Path
@@ -223,7 +225,7 @@ class SheetLookupOptions(SheetOptions, Json.Serial[SheetLookupOptionsDict]):
                 val_cols=list(set(val_cols))
             )
         except Exception as e:
-            raise Exception(LogMsg.err(
+            raise RuntimeError(LogMsg.err(
                 e,
                 received=str(data)
             )) from e
@@ -250,6 +252,7 @@ class MappedDataSearchOptionsDict(TypedDict):
     key_cols: list[str]
     val_cols: NotRequired[list[str]]
     case_sensitive: NotRequired[bool]
+    col_offset: NotRequired[int]
 
 @dataclass
 class MappedDataSearchOptions(SheetOptions, Json.Serial[MappedDataSearchOptionsDict]):
@@ -270,6 +273,7 @@ class MappedDataSearchOptions(SheetOptions, Json.Serial[MappedDataSearchOptionsD
     key_cols: list[str]
     val_cols: list[str]
     case_sensitive: bool=False
+    col_offset: int = 0
 
     def __init__(
         self, 
@@ -278,13 +282,15 @@ class MappedDataSearchOptions(SheetOptions, Json.Serial[MappedDataSearchOptionsD
         key_cols: String.StrInput, 
         val_cols: String.StrInput,
         *,
-        case_sensitive: bool=False
+        case_sensitive: bool=False,
+        col_offset: int = 0
     ):
         self.path =fs.to_path(path)
         self.sheetname = sheetname
         self.key_cols = list(String.resolve_str_input(key_cols))
         self.val_cols = list(String.resolve_str_input(val_cols))
         self.case_sensitive = case_sensitive
+        self.col_offset = col_offset
 
     @classmethod
     def from_dict(cls, data: Json.JsonDict[MappedDataSearchOptionsDict], /):
@@ -294,7 +300,8 @@ class MappedDataSearchOptions(SheetOptions, Json.Serial[MappedDataSearchOptionsD
                 sheetname=data.get('sheetname', ''),
                 key_cols=data['key_cols'],
                 val_cols=data.get('val_cols', []),
-                case_sensitive=data.get('case_sensitive', False)
+                case_sensitive=data.get('case_sensitive', False),
+                col_offset=data.get('col_offset', 0)
             )
         except Exception as e:
             raise RuntimeError(LogMsg.err(
@@ -320,6 +327,7 @@ class MappedData(): # i.e. MappedDataSearchResult
     columns: list[str]
     header: HeaderIndex # from the sheet
     """ 
-    use `header.columns[self.columns[i]]` and `rows[i][indexOf('__row_index__')]` to reconstruct `CellAddress` in original sheet
-    where `columns[i] != '__row_index__'` and `columns[i]` in `MappedDataSearchOptions.columns`
+    use `header.columns[self.columns[i]]` and `rows[i][indexOf('__row_index__')]` 
+    to reconstruct `CellAddress` in original sheet
+    - where `columns[i] != '__row_index__'` and `columns[i]` in `MappedDataSearchOptions.columns`
     """
