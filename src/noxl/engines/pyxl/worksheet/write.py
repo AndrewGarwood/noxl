@@ -3,10 +3,10 @@
 """
 from __future__ import annotations
 from pathlib import Path
-from typing import (Any, Optional, Mapping, Callable, Sequence, OrderedDict)
+from typing import (Any, Sequence, )
 import lute
-from pyqi import (Array, String, Function)
 from openpyxl.utils import (get_column_letter)
+from openpyxl.worksheet._read_only import (ReadOnlyWorksheet)
 from noxl.models import (CellAddress, CellAddressLike, HeaderIndex, normalize_cell_value)
 from ..types import (PyxlWorkbook, PyxlWorksheet, PyxlWorkbookSource)
 from ..utils import (resolve_pyxl_wb, get_visible_sheetnames)
@@ -18,8 +18,10 @@ def delete_rows(
     ws: PyxlWorksheet, 
     /,
     row_min: int=2, 
-    row_max: Optional[int]=None
+    row_max: int | None=None
 ) -> PyxlWorksheet:
+    if (isinstance(ws, ReadOnlyWorksheet)):
+        raise ValueError(LogMsg(f"Worksheet '{ws.title}' is read only"))
     row_max = row_max if isinstance(row_max, int) else ws.max_row
     ws.delete_rows(row_min, row_max)
     return ws
@@ -28,11 +30,13 @@ def clear_range(
     ws: PyxlWorksheet,
     /,
     row_min: int = 2,
-    row_max: Optional[int] = None,
+    row_max: int | None = None,
     col_min: int = 1,
-    col_max: Optional[int] = None
+    col_max: int | None = None
 ) -> PyxlWorksheet:
     """Sets the value of all cells within the specified range to None."""
+    if (isinstance(ws, ReadOnlyWorksheet)):
+        raise ValueError(LogMsg(f"Worksheet '{ws.title}' is read only"))
     row_max = row_max if isinstance(row_max, int) else ws.max_row
     col_max = col_max if isinstance(col_max, int) else ws.max_column
 
@@ -48,7 +52,7 @@ def write_rows(
     origin: CellAddressLike="A2",
     /,
 ) -> PyxlWorksheet:
-    """ `O(M x N)` """
+    """ `O(M x N)` :( """
     try:
         origin = CellAddress.from_any(origin)
         for i, row in enumerate(rows, start=origin.row):
@@ -59,5 +63,5 @@ def write_rows(
         raise RuntimeError(LogMsg.err(e,
             rows=lute.annotate(rows),
             origin=str(origin)
-        ))
+        )) from e
     

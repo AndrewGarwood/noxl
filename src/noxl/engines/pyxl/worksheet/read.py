@@ -2,9 +2,9 @@
 *`@file`* `engines/pyxl/worksheet/read`
 """
 from __future__ import annotations
-from typing import (Any, Mapping, Callable, Sequence, OrderedDict, overload)
+from pathlib import Path
+from typing import (Any,  overload)
 import lute
-from pyqi import (Array, String, Function, require)
 from openpyxl.utils import (get_column_letter)
 from noxl.models import (CellAddress, CellAddressLike, HeaderIndex, normalize_cell_value)
 from ..types import (PyxlWorkbook, PyxlWorksheet, PyxlWorkbookSource, Row)
@@ -19,107 +19,6 @@ def cell_value(ws: PyxlWorksheet, /, row: int, column: int) -> Any:
     *`@returns`* `ws.cell(row, column).value`
     """
     return ws.cell(row, column).value
-
-
-def find_header(
-    wb_source: PyxlWorkbookSource,
-    sheetname: str | Callable[[str], bool] | None=None,
-    /,
-    required_headers: Sequence[str] | None=None,
-    min_header_len: int = 2,
-    scan_rows: int=25,
-    scan_cols: int=50,
-    unique_sheetname: bool=False,
-    normalize_header_value: Callable[..., str] | None=None,
-    col_offset: int | None=None
-) -> HeaderIndex:
-    """
-    *`@returns`* `HeaderIndex (dataclass) = { row: int; columns: dict[str, int]; headers: tuple[str, ...] }`
-    """
-    wb: PyxlWorkbook | None = None
-    resolved_sheetname: str | None = None
-    try:
-        require.positive_integer(scan_cols, "scan_cols")
-        require.positive_integer(scan_rows, "scan_rows")
-        if (not required_headers and min_header_len < 1):
-            raise ValueError(
-                "min_header_len must be positive integer when required_headers not provided"
-            )
-        if (col_offset is not None and (not isinstance(col_offset, int) or col_offset < 0)):
-            raise ValueError(LogMsg.bad_arg(
-                col_offset, "col_offset", "Nonnegative integer required", int
-            ))
-        if (col_offset is None): col_offset = 0
-        wb = resolve_pyxl_wb(wb_source)
-        valid_sheetnames = wb.sheetnames
-        if (isinstance(sheetname, str)):
-            if (sheetname not in valid_sheetnames):
-                raise KeyError(LogMsg(
-                    f"sheetname not found in workbook",
-                    workbook=wb.path,
-                    sheetname=sheetname,
-                    valid_sheetnames=valid_sheetnames
-                ))
-            resolved_sheetname = sheetname
-        elif isinstance(sheetname, Callable):
-            resolved_sheetname = Array.find(
-                valid_sheetnames, 
-                sheetname, 
-                unique=unique_sheetname, 
-                strict=True
-            )
-        else:
-            resolved_sheetname = get_visible_sheetnames(wb)[0]
-        ws = wb[resolved_sheetname]
-        max_scan_row = min(scan_rows, ws.max_row)
-        max_scan_col = min(scan_cols, ws.max_column)
-        _rows = get_all_rows(ws)
-        def acc_rowdict(acc: OrderedDict[str, int], curr: Any, i: int):
-            if (not curr): return acc
-            value = str(curr).strip()
-            if (not value): return acc
-            acc[value] = i
-            return acc
-        if (normalize_header_value is None):
-            normalize_header_value = Function.Partial(
-                normalize_cell_value, 
-                case_sensitive=False
-            )
-        for row_idx, r in enumerate(_rows[:max_scan_row], start=1):
-            if row_idx > scan_rows:
-                break
-            row = r[col_offset:max_scan_col]
-            rowdict = Array.reduce(row, acc_rowdict, OrderedDict(), 1+col_offset)
-            header_found: bool = False
-            norm_row = set(Array.map(rowdict.keys(), normalize_header_value))
-            if (required_headers):
-                header_found = Array.every(
-                    Array.map(required_headers, normalize_header_value),
-                    lambda h: h in norm_row
-                )
-            else:
-                header_found = len(norm_row) >= min_header_len
-            
-            if (header_found):
-                return HeaderIndex(row_idx, columns=rowdict)
-            
-        raise RuntimeError(LogMsg(
-            f"Unable to find header in target worksheet",
-            max_scan_row=max_scan_row,
-            max_scan_col=max_scan_col
-        ))
-    except Exception as e:
-        raise RuntimeError(LogMsg.err(
-            e,
-            scan_rows=scan_rows,
-            scan_cols=scan_cols,
-            wb_source=lute.annotate(wb_source),
-            resolved_sheetname=resolved_sheetname,
-            required_headers=required_headers,
-            min_header_len=min_header_len
-        )) from e
-    finally:
-        if wb is not None: wb.close()
 
 
 def get_all_rows(ws: PyxlWorksheet, /, values_only: bool=True) -> list[Row]:
@@ -189,6 +88,6 @@ def rows(
             origin=str(origin),
             max_cols=max_cols,
             values_only=values_only
-        ))
+        )) from e
     finally:
         if (wb is not None): wb.close()

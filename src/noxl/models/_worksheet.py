@@ -5,13 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import (
-    Any, Mapping, Optional, 
+    Any, Callable, Mapping,
     TypeVar, Generic,TypeAlias, 
     NotRequired
 )
 from typing_extensions import (TypedDict)
-from pyqi import (Json, String, fs)
-from lute import LogMsg
+from pyqi import (Json, String, fs, Array)
+from lute import LogMsg, callsite
 from ._cell import *
 
 T = TypeVar('T')
@@ -29,11 +29,11 @@ class SheetRange(Json.Serial[SheetRangeDict]):
     """
     - *`@property`* `sheetname` `(str)`
     - *`@property`* `origin` `(CellAddressLike) default = 'A2'`
-    - *`@property`* `num_cols` `(Optional[int]) default = None`
+    - *`@property`* `num_cols` `(int | None) default = None`
     """
     sheetname: str = "Sheet1"
     origin: CellAddressLike = "A2"
-    num_cols: Optional[int] = None
+    num_cols: int | None = None
     @classmethod
     def from_dict(cls, data: Json.JsonDict[SheetRangeDict], /) -> SheetRange:
         try:
@@ -45,8 +45,9 @@ class SheetRange(Json.Serial[SheetRangeDict]):
                 origin=_origin,
                 num_cols=data.get("num_cols", None)
             )
+        except (KeyError, ValueError): raise
         except Exception as e:
-            raise ValueError(LogMsg.err(error=e, data=data)) from e
+            raise RuntimeError(LogMsg.err(error=e, data=data)) from e
 
     @classmethod
     def range_dict(cls, data: dict[str, SheetRangeDict]) -> SheetRangeDictionary:
@@ -58,7 +59,6 @@ class SheetRange(Json.Serial[SheetRangeDict]):
 SheetRangeDictionary: TypeAlias = dict[str, SheetRange]
 """ e.g. `{ [txnId: string]: SheetRangeSpec }` """
 
-SheetRangeSpec = SheetRange # temp alias
 
 class SheetCopyEndpointDict(TypedDict):
     path: str
@@ -72,12 +72,12 @@ class SheetCopyEndpoint(Json.Serial[SheetCopyEndpointDict]):
     - *`@property`* `path` `(Path)`
     - *`@property`* `sheetname` `(str)`
     - *`@property`* `origin` `(CellAddressLike) default = 'A2'`
-    - *`@property`* `num_cols` `(Optional[int]) default = None`
+    - *`@property`* `num_cols` `(int | None) default = None`
     """
     sheetname: str
     origin: CellAddressLike
     path: Path = field(default_factory=Path)
-    num_cols: Optional[int] = None
+    num_cols: int | None = None
 
     @classmethod
     def from_range_spec(
@@ -108,6 +108,7 @@ class SheetCopyEndpoint(Json.Serial[SheetCopyEndpointDict]):
                 origin=data.get('origin', "A2"),
                 num_cols=data.get('num_cols', None)
             )
+        except (KeyError, ValueError): raise
         except Exception as e:
             raise RuntimeError(LogMsg.err(error=e, data=Json.serialize(data))) from e
 
@@ -224,6 +225,7 @@ class SheetLookupOptions(SheetOptions, Json.Serial[SheetLookupOptionsDict]):
                 key_map=key_map,
                 val_cols=list(set(val_cols))
             )
+        except (KeyError, ValueError): raise
         except Exception as e:
             raise RuntimeError(LogMsg.err(
                 e,
@@ -253,18 +255,22 @@ class MappedDataSearchOptionsDict(TypedDict):
     val_cols: NotRequired[list[str]]
     case_sensitive: NotRequired[bool]
     col_offset: NotRequired[int]
+    sheetname_selector: NotRequired[String.StringConditionOptionsDict]
+    column_selector: NotRequired[String.StringConditionOptionsDict]
 
 @dataclass
 class MappedDataSearchOptions(SheetOptions, Json.Serial[MappedDataSearchOptionsDict]):
     """
     *`@extends`* `SheetOptions`
-    - intended to replace SheetMappingSpec
     ```
     path: Path
     sheetname: str
     key_cols: list[str]
     val_cols: list[str]
     case_sensitive: bool=False
+    col_offset: int = 0
+    sheetname_selector: Callable[[str], bool] | None = None
+    column_selector: Callable[[str], bool] | None = None
     - property def columns(self) -> list[str]
     ```
     """
@@ -274,45 +280,99 @@ class MappedDataSearchOptions(SheetOptions, Json.Serial[MappedDataSearchOptionsD
     val_cols: list[str]
     case_sensitive: bool=False
     col_offset: int = 0
+    sheetname_selector_options: String.StringConditionOptions | None = None
+    column_selector_options: String.StringConditionOptions | None = None
+    
+    
+    @property
+    def sheetname_selector(self):
+        if (not self.sheetname_selector_options):
+            raise RuntimeError(LogMsg(f"self.sheetname_selector_options is undefined"))
+        return String.compile_condition_options(self.sheetname_selector_options)
 
+    @property
+    def column_selector(self):
+        print(f"column_selector called from: ")
+        print(callsite(depth=1))
+        print(callsite(depth=2))
+        print(callsite(depth=3))
+        if (not self.column_selector_options):
+            raise RuntimeError(LogMsg(f"self.column_selector_options is undefined"))
+        return String.compile_condition_options(self.column_selector_options)
+    
     def __init__(
         self, 
         path: fs.StrPath, 
         sheetname: str, 
         key_cols: String.StrInput, 
-        val_cols: String.StrInput,
+        val_cols: String.StrInput | None = None,
         *,
         case_sensitive: bool=False,
-        col_offset: int = 0
+        col_offset: int = 0,
+        sheetname_selector_options: String.StringConditionOptions | None = None,
+        column_selector_options: String.StringConditionOptions | None = None
     ):
-        self.path =fs.to_path(path)
+        self.path = fs.to_path(path)
         self.sheetname = sheetname
         self.key_cols = list(String.resolve_str_input(key_cols))
-        self.val_cols = list(String.resolve_str_input(val_cols))
+        self.val_cols = list(String.resolve_str_input(val_cols)) if val_cols is not None else []
         self.case_sensitive = case_sensitive
         self.col_offset = col_offset
+        self.sheetname_selector_options = sheetname_selector_options
+        self.column_selector_options = column_selector_options
 
     @classmethod
     def from_dict(cls, data: Json.JsonDict[MappedDataSearchOptionsDict], /):
         try:
+            _sheetname_options = data.get('sheetname_selector_options', None)
+            _column_options = data.get('column_selector_options', None)
             return cls(
                 path=fs.to_path(data['path']),
-                sheetname=data.get('sheetname', ''),
+                sheetname=data.get('sheetname', ''), # 'Sheet1'
                 key_cols=data['key_cols'],
                 val_cols=data.get('val_cols', []),
                 case_sensitive=data.get('case_sensitive', False),
-                col_offset=data.get('col_offset', 0)
+                col_offset=data.get('col_offset', 0),
+                sheetname_selector_options = (
+                    String.StringConditionOptions.from_dict(_sheetname_options) 
+                    if _sheetname_options is not None 
+                    else None
+                ),
+                column_selector_options = (
+                    String.StringConditionOptions.from_dict(_column_options) 
+                    if _column_options is not None
+                    else None
+                ),
             )
+        except (KeyError, ValueError): raise
         except Exception as e:
             raise RuntimeError(LogMsg.err(
                 error=e, 
                 received=str(data)
             )) from e
+        
     @property
     def columns(self):
         """ *`@returns`* `[*self.key_cols, *self.val_cols]` """
         return [*self.key_cols, *self.val_cols]
 
+    def get_column_selection(self, candidates: Iterable[str], /) -> list[str]:
+        """ 
+        - does not modify `self.val_cols` 
+        - *`@raises`* `RuntimeError` if selector is undefined
+        """
+        if (not self.column_selector_options):
+            raise RuntimeError(LogMsg(f"self.colu,m_selector_options is undefined"))
+        return Array.filter(candidates, self.column_selector)
+
+    def get_sheetname_selection(self, candidates: Iterable[str]) -> list[str]:
+        """ 
+        - does not modify `self.sheetname` 
+        - *`@raises`* `RuntimeError` if selector is undefined
+        """
+        if (not self.sheetname_selector_options):
+            raise RuntimeError(LogMsg(f"self.sheetname_selector_options is undefined"))
+        return Array.filter(candidates, self.sheetname_selector)
 
 @dataclass
 class MappedData(): # i.e. MappedDataSearchResult
