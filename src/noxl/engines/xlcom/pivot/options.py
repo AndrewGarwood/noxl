@@ -118,7 +118,7 @@ class CreateOptions:
     src: TableSource
     dst: TableDestination = _field(default_factory=TableDestination)
     fields: Fields = _field(default_factory=Fields)
-    slicers: list[SlicerOptions] = _field(default_factory=list)
+    slicers: list[SlicerOptions] = _field(default_factory=list)  # TODO: SlicerOptionsInput: Arbitrary[str | SlicerOptions]
     sort: Optional[ExcelSortOptions] = None
     # repeat_labels: bool = True
     save_on_close: bool = True

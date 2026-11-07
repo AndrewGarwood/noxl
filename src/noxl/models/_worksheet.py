@@ -292,10 +292,6 @@ class MappedDataSearchOptions(SheetOptions, Json.Serial[MappedDataSearchOptionsD
 
     @property
     def column_selector(self):
-        print(f"column_selector called from: ")
-        print(callsite(depth=1))
-        print(callsite(depth=2))
-        print(callsite(depth=3))
         if (not self.column_selector_options):
             raise RuntimeError(LogMsg(f"self.column_selector_options is undefined"))
         return String.compile_condition_options(self.column_selector_options)

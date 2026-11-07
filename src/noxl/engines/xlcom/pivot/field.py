@@ -64,7 +64,11 @@ class AxisFieldOptions():
     """
     field: str
     subtotals: list[ExcelAggregation] = _field(default_factory=list)
-    """ what agg functions to have calculate for self.field """
+    """ 
+    what agg functions to calculate for self.field
+    - empty list → no subtotal functions applied
+    
+    """
     layout: LayoutForm = LayoutForm.OUTLINE
     # type: Literal[FieldType.ROW, FieldType.COLUMN]=FieldType.ROW
     item_positions: dict[str, int] = _field(default_factory=dict)
@@ -199,8 +203,11 @@ class Fields:
         *`@note`* param `rows`, `columns`, `filters`, `values` can be str | Iterable[str] ; 
         - strings are interpreted as column/field names
         - they are normalized to list of their respective dataclass
+        - `(type) AxisFieldOptionsInput = str | AxisFieldOptions | Iterable[str | AxisFieldOptions]`
+        - `(type) FilterFieldsInput = str | FilterFieldOptions | Iterable[str | FilterFieldOptions]`
 
         *`@param`* `values`
+        - `(type) DataFieldsInput = str | DataFieldOptions | Iterable[str | DataFieldOptions] | Mapping[ExcelAggregation, str | Iterable[str]]`
         - if is `Arbitrary[str]` - `DataFieldOptions` with `pivot_fn=default_aggregation` created for each field specified
         - if is `Mapping[ExcelAggregation, Arbitrary[str]]`
             - a `DataFieldOption` with `pivot_fn=key` is created the fields specified in `values[key]`

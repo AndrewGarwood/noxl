@@ -32,7 +32,9 @@ class HeaderIndex():
     ```
     """
     row: int
+    sheetname: str
     columns: OrderedDict[str, int] = field(default_factory=OrderedDict)
+
     @property
     def headers(self):
         return tuple(self.columns.keys())

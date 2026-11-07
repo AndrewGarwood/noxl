@@ -178,7 +178,6 @@ def find_header(
             if row_idx > scan_rows:
                 break
             row = r[col_offset:max_scan_col]
-            # print(f"@ {row_idx=}, {r=}")
             rowdict = Array.reduce(row, acc_rowdict, OrderedDict(), 1+col_offset)
             norm_row = set(Array.map(rowdict.keys(), normalize_header_value))
             if (required_headers):
@@ -190,8 +189,8 @@ def find_header(
                 header_found = len(norm_row) >= min_header_len
             
             if (header_found):
-                return HeaderIndex(row_idx, columns=rowdict)
-        raise RuntimeError(LogMsg(
+                return HeaderIndex(row_idx, columns=rowdict, sheetname=ws.title)
+        raise ValueError(LogMsg(
             f"Unable to find header in target worksheet",
             max_scan_row=max_scan_row,
             max_scan_col=max_scan_col
