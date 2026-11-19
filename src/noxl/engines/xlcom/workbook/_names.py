@@ -2,6 +2,7 @@
 *`@file`* `engines/xlcom/workbook/_names`
 """
 from typing import (Any)
+from pyqi import export
 from win32com.client import CDispatch
 
 
@@ -10,7 +11,6 @@ def entry(wb: CDispatch, name: str, /) -> CDispatch:
     *`@returns`* `wb.Names(name)`
     """
     obj = wb.Names(name)
-    # slog.debug(f"{lsource(__file__, get_named_obj)}, obj = wb.Names(name) {type(obj)=}")
     return obj
 
 def value(wb: CDispatch, name: str, /) -> Any:
@@ -40,3 +40,12 @@ def ref_range_value(wb: CDispatch, name: str, /) -> Any:
     - use when name is formula-defined workbook name whose formula evaluates directly to a scalar value. 
     """
     return wb.Names(name).RefersToRange.Value
+
+
+__all__ = export(
+    entry, 
+    value, 
+    ref, 
+    ref_range, 
+    ref_range_value
+)
