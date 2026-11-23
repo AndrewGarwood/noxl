@@ -4,7 +4,7 @@
 
 from pathlib import Path
 from typing import Any, Callable, Literal, OrderedDict, Sequence, overload
-from pyqi import (Array, Function, require)
+from pyqi import (Array, Function, require, export)
 from lute import annotate, LogMsg
 from openpyxl import load_workbook
 
@@ -13,7 +13,8 @@ from openpyxl.worksheet.worksheet import (Worksheet)
 from noxl.models import (HeaderIndex, normalize_cell_value)
 from .types import (PyxlWorkbook, PyxlWorkbookSource, PyxlWorksheet, PyxlSheetInfo)
 
-#TODO have resolve_pyxl_wb return tuple where second val is bool indicating 
+#TODO change or make different resolve_pyxl_wb such that return value is tuple 
+# where second val is bool indicating 
 # whether module owns the wb or not, then only close workbook in `finally` 
 # statements when wb is owned...
 
@@ -31,16 +32,23 @@ def resolve_pyxl_wb(
 def is_hidden_worksheet(ws: PyxlWorksheet, /) -> bool:
     return "hidden" in ws.sheet_state.lower()
 
-def get_visible_sheetnames(wb_source: PyxlWorkbookSource, /) -> list[str]:
+def get_visible_sheetnames(wb_source: PyxlWorkbookSource, /, *, close_wb: bool=True) -> list[str]:
     wb = resolve_pyxl_wb(wb_source)
-    return Array.filter(wb.sheetnames, lambda k: not is_hidden_worksheet(wb[k]))
+    result = Array.filter(wb.sheetnames, lambda k: not is_hidden_worksheet(wb[k]))
+    if close_wb: wb.close()
+    return result
 
-def get_sheetinfo(wb_source: PyxlWorkbookSource, /) -> dict[str, PyxlSheetInfo]:
+def get_sheetinfo(
+    wb_source: PyxlWorkbookSource, 
+    /,
+    *,
+    close_wb: bool=True
+) -> dict[str, PyxlSheetInfo]:
     wb = resolve_pyxl_wb(wb_source, True, True)
     result: dict[str, PyxlSheetInfo] = dict()
     for i, s in enumerate(wb.sheetnames):
         result[s] = PyxlSheetInfo(wb[s].sheet_state, i)
-    if not isinstance(wb_source, PyxlWorkbook):
+    if close_wb: 
         wb.close()
     return result
 
@@ -208,3 +216,11 @@ def find_header(
     finally:
         if wb is not None and close_wb: wb.close()
 
+__all__ = export(
+    resolve_pyxl_wb, 
+    is_hidden_worksheet, 
+    get_visible_sheetnames, 
+    get_sheetinfo, 
+    find_sheetname, 
+    find_header
+)

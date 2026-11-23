@@ -1,17 +1,20 @@
 """
 *`@file`* `engines/pyxl/worksheet/read`
 """
-from __future__ import annotations
+from __future__ import annotations as _annotations
 from pathlib import Path
 from typing import (Any,  overload)
-import lute
+from lute import (LogMsg, get_logger, annotate)
+from pyqi import export
 from openpyxl.utils import (get_column_letter)
 from noxl.models import (CellAddress, CellAddressLike, HeaderIndex, normalize_cell_value)
 from ..types import (PyxlWorkbook, PyxlWorksheet, PyxlWorkbookSource, Row)
 from ..utils import (resolve_pyxl_wb, get_visible_sheetnames)
 
-LogMsg = lute.LogMsg
-mlog = lute.get_logger(__file__)
+mlog = get_logger(__file__)
+
+
+# TODO: func for row count.
 
 # kinda unnecessary but useful if don't want to type ws.cell(...).value all the time 
 def cell_value(ws: PyxlWorksheet, /, row: int, column: int) -> Any:
@@ -47,7 +50,8 @@ def rows(
     sheetname: str | None=None,  
     origin: CellAddressLike | None=None, 
     max_cols: int | None=None, 
-    values_only: bool=True
+    values_only: bool=True,
+    close_wb: bool=True
 ) -> list[Row]:
     wb: PyxlWorkbook | None=None
     try:
@@ -82,7 +86,7 @@ def rows(
     except Exception as e:
         raise RuntimeError(LogMsg.err(
             e,
-            src=lute.annotate(src),
+            src=annotate(src),
             sheetname=sheetname,
             wb="<unknown>" if wb is None else wb.path,
             origin=str(origin),
@@ -90,4 +94,7 @@ def rows(
             values_only=values_only
         )) from e
     finally:
-        if (wb is not None): wb.close()
+        if (wb is not None and close_wb): 
+            wb.close()
+
+__all__ = export(rows, cell_value, get_all_rows)
