@@ -160,11 +160,12 @@ def _is_empty_cell(
 def row_count(
     src: PyxlWorkbookSource,
     /,
-    sheetname: str,
     *,
+    sheetname: str,
     origin: CellAddressLike = "A1",
     num_cols: int | None = None,
-    is_empty_row: Callable[[Row], bool] = _is_empty_row
+    is_empty_row: Callable[[Row], bool] = _is_empty_row,
+    use_max_row: bool = False
 ) -> int: ...
 
 
@@ -175,39 +176,61 @@ def row_count(
     *,
     origin: CellAddressLike = "A1",
     num_cols: int | None = None,
-    is_empty_row: Callable[[Row], bool] = _is_empty_row
+    is_empty_row: Callable[[Row], bool] = _is_empty_row,
+    use_max_row: bool = False
 ) -> int: ...
 
 
 def row_count(
     src: PyxlWorksheet | PyxlWorkbookSource,
     /,
-    sheetname: str | None = None,
     *,
+    sheetname: str | None = None,
     origin: CellAddressLike = "A1",
     num_cols: int | None = None,
-    is_empty_row: Callable[[Row], bool] = _is_empty_row
+    is_empty_row: Callable[[Row], bool] = _is_empty_row,
+    use_max_row: bool = False
 ) -> int:
-    """Count non-empty rows from `origin`, including `origin.row`.
+    """
+    - Count **contiguous** non-empty rows from `origin` to first empty row encountered or `ws.max_row`
+        - includes `origin.row`.
     - *`@param`* `num_cols (int | None)` a positive width starting at the origin column. If omitted,
     use the remaining worksheet columns. 
+    - *`@param`* `is_empty_row` default == `_is_empty_row()` where `None` and `""` 
+    are considered empty cell values. 
     
-    *`@param`*
-    The predicate receives cell values,
-    not cells; default callable `_is_empty_row` `None` and `""` are empty. Headers are not
-    detected or skipped. Paths are opened read-only; objects are borrowed.
+    Headers are not detected or skipped. Paths are opened read-only; objects are borrowed.
     """
     start = CellAddress.from_any(origin)
     if (num_cols is not None):
         require.positive_integer(num_cols, "row_count(..., *, <num_cols>, )")
     with _worksheet_context(src, sheetname, read_only=True) as ws:
+        last_row = ws.max_row
+        if use_max_row:
+            if last_row is None:
+                raise ValueError(LogMsg(
+                    "use_max_row requires a known worksheet max_row (int)",
+                    "(Worksheet.max_row returned None)"
+                ))
+            return max(0, last_row - start.row + 1)
+        if last_row is not None and start.row > last_row:
+            return 0
         last_col = ws.max_column if num_cols is None else start.col + num_cols - 1
         if last_col is not None and last_col < start.col:
             return 0
         with closing(ws.iter_rows(
-            min_row=start.row, min_col=start.col, max_col=last_col, values_only=True
+            min_row=start.row,
+            max_row=last_row,
+            min_col=start.col,
+            max_col=last_col,
+            values_only=True
         )) as selected_rows:
-            return sum(1 for row in selected_rows if not is_empty_row(row))
+            count = 0
+            for row in selected_rows:
+                if is_empty_row(row):
+                    break
+                count += 1
+            return count
 
 
 __all__ = export(
@@ -215,4 +238,4 @@ __all__ = export(
     cell_value, 
     get_all_rows,
     row_count
-    )
+)

@@ -201,8 +201,10 @@ The convenience path forms are for detached results: sheet names, sheet
 metadata, `HeaderIndex`, mapped data, value-only rows, and row counts.
 
 `row_count` and `rows` share worksheet resolution. The count opens paths in
-read-only mode and scans values within the owning scope; existing workbooks
-and worksheets are borrowed. An explicit `num_cols` is a width from `origin`.
+read-only mode and scans values within the owning scope until the first empty
+row or the worksheet's end; existing workbooks and worksheets are borrowed.
+The `use_max_row` option uses the worksheet's known last row without scanning.
+An explicit `num_cols` is a width from `origin`.
 Without it, the worksheet's column extent applies rather than a detected
 header, so headerless data does not require special handling.
 

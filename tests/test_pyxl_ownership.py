@@ -93,41 +93,52 @@ class WorkbookFixture(TestCase):
 
 
 class RowCountTests(WorkbookFixture):
-    def test_counts_only_rows_with_values_in_the_selected_columns(self) -> None:
+    def test_stops_at_first_empty_row_in_the_selected_columns(self) -> None:
         wb = Workbook()
         self.addCleanup(wb.close)
         ws = wb["Sheet"]
-        self.assertEqual(pyxl.row_count(ws), 0)
+        self.assertEqual(pyxl.get_row_count(ws), 0)
         ws["B1"] = "header"
         ws["A2"] = "left of origin"
         ws["B3"] = ""
         ws["C4"] = 0
-        ws["B6"] = False
-        ws["B7"] = " "
-        ws["D8"] = "outside width"
+        ws["B5"] = False
+        ws["B6"] = " "
+        ws["D7"] = "outside width"
+        ws["B8"] = "after gap"
         ws["C10"].number_format = "0.00"
 
-        self.assertEqual(pyxl.row_count(ws, origin="B2", num_cols=2), 3)
-        self.assertEqual(pyxl.row_count(ws, origin="B2"), 4)
-        self.assertEqual(pyxl.row_count(ws, origin="B11"), 0)
+        self.assertEqual(pyxl.get_row_count(ws, origin="B2", num_cols=2), 0)
+        self.assertEqual(pyxl.get_row_count(ws, origin="B3"), 0)
+        self.assertEqual(pyxl.get_row_count(ws, origin="B4", num_cols=2), 3)
+        self.assertEqual(pyxl.get_row_count(ws, origin="B4"), 5)
+        self.assertEqual(pyxl.get_row_count(ws, origin="B11"), 0)
         predicate = Mock()
-        self.assertEqual(pyxl.row_count(ws, origin="E1", is_empty_row=predicate), 0)
+        self.assertEqual(pyxl.get_row_count(ws, origin="E1", is_empty_row=predicate), 0)
+        predicate.assert_not_called()
+        self.assertEqual(
+            pyxl.get_row_count(ws, origin="B4", use_max_row=True, is_empty_row=predicate),
+            7
+        )
+        self.assertEqual(pyxl.get_row_count(ws, origin="B11", use_max_row=True), 0)
         predicate.assert_not_called()
 
     def test_custom_emptiness_and_unknown_read_only_dimensions(self) -> None:
         wb = self.borrowed()
         ws = wb["Data"]
+        self.assertEqual(pyxl.get_row_count(wb, "Data", origin="A2", use_max_row=True), 2)
         ws.reset_dimensions()
 
-        def ignore_low_values(row: pyxl.Row, /) -> bool:
-            return all(not isinstance(value, int) or value < 20 for value in row)
-
-        self.assertEqual(pyxl.row_count(ws, origin="B2", is_empty_row=ignore_low_values), 1)
-        self.assertEqual(pyxl.row_count(wb, "Data", origin="A2"), 2)
+        predicate = Mock(side_effect=lambda row: row == (10,))
+        self.assertEqual(pyxl.get_row_count(ws, origin="B2", is_empty_row=predicate), 0)
+        predicate.assert_called_once_with((10,))
+        self.assertEqual(pyxl.get_row_count(wb, "Data", origin="A2"), 2)
+        with self.assertRaisesRegex(ValueError, "known worksheet max_row"):
+            pyxl.get_row_count(ws, use_max_row=True)
         self.assertEqual(list(ws.values), EXPECTED_ROWS)
 
-    def test_path_counts_in_read_only_mode_and_closes_on_predicate_failure(self) -> None:
-        self.assertEqual(pyxl.row_count(self.path, "Data"), 3)
+    def test_path_closes_after_early_stop_or_predicate_failure(self) -> None:
+        self.assertEqual(pyxl.get_row_count(self.path, "Data"), 3)
         failure = ValueError("predicate failed")
         for fail in (False, True):
             with self.subTest(failure=fail):
@@ -135,13 +146,19 @@ class RowCountTests(WorkbookFixture):
                 with patch(LOADER, return_value=wb) as load:
                     if fail:
                         with self.assertRaises(ValueError) as caught:
-                            pyxl.row_count(
+                            pyxl.get_row_count(
                                 str(self.path), "Data",
                                 is_empty_row=Mock(side_effect=failure)
                             )
                         self.assertIs(caught.exception, failure)
                     else:
-                        self.assertEqual(pyxl.row_count(str(self.path), "Data"), 3)
+                        self.assertEqual(
+                            pyxl.get_row_count(
+                                str(self.path), "Data",
+                                is_empty_row=lambda row: row[0] == "A"
+                            ),
+                            1
+                        )
                     load.assert_called_once_with(str(self.path), read_only=True, data_only=True)
                 self.assert_closed(wb)
 
@@ -149,9 +166,9 @@ class RowCountTests(WorkbookFixture):
         with patch(LOADER) as load:
             for width in (0, -1, True):
                 with self.subTest(width=width), self.assertRaisesRegex(ValueError, "num_cols"):
-                    pyxl.row_count(self.path, "Data", num_cols=width)
-            with self.assertRaisesRegex(ValueError, "origin"):
-                pyxl.row_count(self.path, "Data", origin="R0C1")
+                    pyxl.get_row_count(self.path, "Data", num_cols=width)
+            with self.assertRaisesRegex(ValueError, r"CellAddress\.row"):
+                pyxl.get_row_count(self.path, "Data", origin="R0C1")
             load.assert_not_called()
 
 

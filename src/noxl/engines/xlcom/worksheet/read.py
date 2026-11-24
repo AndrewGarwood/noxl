@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import (Any, Optional)
 from  win32com.client import CDispatch
 from lute import LogMsg, annotate
+from pyqi import export
 from ....models import (CellAddress, CellAddressLike)
 
 def range_by_dimensions(
@@ -96,4 +97,13 @@ def get_current_region_dimensions(region: CDispatch, /) -> tuple[int, int]:
         raise RuntimeError(LogMsg.err(
             e,
             region=annotate(region)
-        ))
+        )) from e
+
+
+__all__ = export(
+    range_by_dimensions, 
+    get_value, get_cell, 
+    get_range, 
+    get_current_region, 
+    get_current_region_dimensions
+)

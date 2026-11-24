@@ -40,14 +40,19 @@ cleanup error policy, and architectural alternatives.
 ## Counting worksheet rows
 
 ```python
-count = pyxl.row_count(path, sheetname="Data", origin="B2", num_cols=3)
+count = pyxl.get_row_count(path, sheetname="Data", origin="B2", num_cols=3)
 ```
 
-This counts non-empty rows from row 2 in columns B through D. Omit `num_cols`
-to scan the remaining worksheet columns; there is no header detection. A row is
-empty only if every selected value is `None` or `""`. Override `is_empty_row`
-to use a different rule. You can also pass a workbook and sheet name or pass
-a worksheet directly. Path inputs are opened read-only and closed by the helper.
+This counts contiguous rows from row 2 in columns B through D, stopping at
+the first empty row or the end of the worksheet. Omit `num_cols` to scan the
+remaining worksheet columns; there is no header detection. By default, a row
+is empty if every selected value is `None` or `""`. Override `is_empty_row`
+to use a different rule. With `use_max_row=True`, the helper counts through
+`ws.max_row` inclusive, including blanks, without scanning cell values. This
+option requires known row dimensions.
+
+You can also pass a workbook and sheet name or pass a worksheet directly.
+Path inputs are opened read-only and closed by the helper.
 
 `read_rows(..., max_cols=...)` is unchanged. The new name `num_cols` makes clear
 that it is a width from `origin`, not an absolute column index.
