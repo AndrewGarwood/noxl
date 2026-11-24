@@ -13,6 +13,6 @@ from .read_data import *
 from .worksheet import (
     rows as read_rows,
     cell_value as read_cell_value,
-    row_count as row_count,
+    row_count as get_row_count,
 )
 from openpyxl import load_workbook
