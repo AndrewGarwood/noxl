@@ -39,11 +39,18 @@ CellAddressLike: TypeAlias = Union[
 - `tuple[str, str] and (t[0] matches [A-Z]+) and t[1] matches \\d+` → assume `(col, row)`
 - `tuple[str, str] and t[0] matches \\d+ and t[1] matches \\d+` → assume `(row, col)`
 """
-@dataclass()
+@dataclass(repr=False)
 class CellAddress(Json.Serial[CellAddressDict]):
-    """ 1-based indexing for (row, col) """
+    """ 
+    `1-based` indexing for `(row, col)` 
+    - `__post_init__()` validates that `row` and `col` are positive integers
+    """
     row: int
     col: int
+    def __post_init__(self):
+        require.positive_integer(self.row, self.__attr_label__("row"))
+        require.positive_integer(self.col, self.__attr_label__("col"))
+
     @classmethod
     def from_str(cls, addr: str, /) -> CellAddress:
         addr = addr.strip()

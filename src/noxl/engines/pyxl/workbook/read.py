@@ -16,6 +16,7 @@ def resolve(
     read_only: bool=False, 
     data_only: bool=True
 ) -> PyxlWorkbook:
+    """Borrow an existing workbook, or load a path that the caller must close."""
     return resolve_pyxl_wb(wb_source, read_only=read_only, data_only=data_only)
 
 def sheetinfo(wb_source: PyxlWorkbookSource,/):

@@ -1,10 +1,10 @@
 """
 *`@file`* `engines/pyxl/types`
 """
-
 from pathlib import Path
 from typing import (Any, Sequence, TypeAlias, TypeGuard)
 from dataclasses import dataclass
+from pyqi import export
 from openpyxl.worksheet.table import (Table as PyxlTable)
 from openpyxl.worksheet._read_only import (ReadOnlyWorksheet)
 from openpyxl.worksheet._write_only import (WriteOnlyWorksheet)
@@ -13,6 +13,9 @@ from openpyxl.workbook import (Workbook as PyxlWorkbook)
 from ...models._workbook import WorkbookSource
 
 PyxlWorksheet: TypeAlias = Worksheet | ReadOnlyWorksheet
+
+def is_pyxl_worksheet(value: Any, /) -> TypeGuard[PyxlWorksheet]:
+    return isinstance(value, (Worksheet, ReadOnlyWorksheet))
 
 PyxlWorkbookSource: TypeAlias = WorkbookSource[PyxlWorkbook]
 
@@ -32,3 +35,12 @@ class PyxlSheetInfo: # TODO see if any other useful props...
 
 
 Row: TypeAlias = Sequence[Any]
+
+__all__ = export(
+    "Row", 
+    "PyxlWorksheet", 
+    "PyxlWorkbookSource", 
+    PyxlSheetInfo,
+    is_pyxl_workbook_source, 
+    is_pyxl_worksheet
+)
