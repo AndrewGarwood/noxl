@@ -194,10 +194,11 @@ def row_count(
     """
     - Count **contiguous** non-empty rows from `origin` to first empty row encountered or `ws.max_row`
         - includes `origin.row`.
-    - *`@param`* `num_cols (int | None)` a positive width starting at the origin column. If omitted,
-    use the remaining worksheet columns. 
-    - *`@param`* `is_empty_row` default == `_is_empty_row()` where `None` and `""` 
-    are considered empty cell values. 
+        - i.e. `relative_row_count`
+    - *`@param`* `num_cols (int | None)` 
+        - positive width starting at the origin column. If omitted, uses the remaining worksheet columns. 
+    - *`@param`* `is_empty_row` 
+        - defaults to `_is_empty_row()` where `None` and `""` are considered empty cell values. 
     
     Headers are not detected or skipped. Paths are opened read-only; objects are borrowed.
     """
@@ -213,10 +214,13 @@ def row_count(
                     "(Worksheet.max_row returned None)"
                 ))
             return max(0, last_row - start.row + 1)
-        if last_row is not None and start.row > last_row:
+        if (last_row is not None and start.row > last_row):
             return 0
-        last_col = ws.max_column if num_cols is None else start.col + num_cols - 1
-        if last_col is not None and last_col < start.col:
+        last_col =(
+            ws.max_column if num_cols is None 
+            else start.col + num_cols
+        )
+        if (last_col is not None and last_col < start.col):
             return 0
         with closing(ws.iter_rows(
             min_row=start.row,
